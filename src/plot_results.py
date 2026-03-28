@@ -1,67 +1,81 @@
-"""
-plot_results.py
----------------
-Load the energies CSV produced by scan_bond_lengths and generate a publication-
-quality plot comparing VQE and exact (FCI) ground-state energies as a function
-of bond length.
-"""
+from __future__ import annotations
 
-import os
+from pathlib import Path
 
 import matplotlib.pyplot as plt
-import pandas as pd
 
 
-def plot_results(
-    input_file: str = "results/energies.csv",
-    output_file: str = "results/energy_curve.png",
+def plot_convergence(
+    counts: list[int],
+    energies: list[float],
+    exact_energy: float,
+    output_path: str | Path | None = None,
+    title: str = "VQE convergence for LiH",
 ) -> None:
-    """Plot VQE vs exact energy curves and save the figure.
+    plt.figure(figsize=(8, 5))
+    plt.plot(counts, energies, marker="o", markersize=3, label="VQE")
+    plt.axhline(exact_energy, linestyle="--", label="Exact energy")
+    plt.xlabel("Evaluation count")
+    plt.ylabel("Energy")
+    plt.title(title)
+    plt.legend()
+    plt.tight_layout()
 
-    Parameters
-    ----------
-    input_file : str, optional
-        Path to the CSV file containing ``bond_length``, ``vqe_energy``, and
-        ``exact_energy`` columns (default ``results/energies.csv``).
-    output_file : str, optional
-        Path where the PNG figure is saved (default
-        ``results/energy_curve.png``).
-    """
-    df = pd.read_csv(input_file)
+    if output_path is not None:
+        plt.savefig(output_path, dpi=300, bbox_inches="tight")
 
-    # Drop rows where the VQE energy was not computed
-    df_exact = df.dropna(subset=["exact_energy"])
-    df_vqe = df.dropna(subset=["vqe_energy"])
+    plt.close()
 
-    fig, ax = plt.subplots(figsize=(8, 6))
 
-    ax.plot(
-        df_exact["bond_length"],
-        df_exact["exact_energy"],
-        "b-o",
-        label="Exact (FCI)",
-        linewidth=2,
-        markersize=5,
-    )
+def plot_reps_overlay(
+    histories: dict[int, dict],
+    exact_energy: float,
+    output_path: str | Path | None = None,
+    title: str = "VQE convergence with different ansatz depths",
+) -> None:
+    plt.figure(figsize=(8, 5))
 
-    if not df_vqe.empty:
-        ax.plot(
-            df_vqe["bond_length"],
-            df_vqe["vqe_energy"],
-            "r--s",
-            label="VQE",
-            linewidth=2,
-            markersize=5,
+    for reps, data in histories.items():
+        plt.plot(
+            data["counts"],
+            data["energies"],
+            marker="o",
+            markersize=3,
+            label=f"reps={reps}",
         )
 
-    ax.set_xlabel("Bond Length (Å)", fontsize=14)
-    ax.set_ylabel("Energy (Hartree)", fontsize=14)
-    ax.set_title("LiH Ground-State Energy vs Bond Length", fontsize=16)
-    ax.legend(fontsize=12)
-    ax.grid(True, alpha=0.3)
-    fig.tight_layout()
+    plt.axhline(exact_energy, linestyle="--", label="Exact energy")
+    plt.xlabel("Evaluation count")
+    plt.ylabel("Energy")
+    plt.title(title)
+    plt.legend()
+    plt.tight_layout()
 
-    os.makedirs(os.path.dirname(output_file) or ".", exist_ok=True)
-    fig.savefig(output_file, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    print(f"Plot saved to {output_file}", flush=True)
+    if output_path is not None:
+        plt.savefig(output_path, dpi=300, bbox_inches="tight")
+
+    plt.close()
+
+
+def plot_bond_scan(
+    rows: list[dict],
+    output_path: str | Path | None = None,
+    title: str = "LiH energy vs bond length",
+) -> None:
+    bond_lengths = [row["bond_length_angstrom"] for row in rows]
+    exact_energies = [row["exact_energy"] for row in rows]
+    vqe_energies = [row["vqe_energy"] for row in rows]
+
+    plt.figure(figsize=(8, 5))
+    plt.plot(bond_lengths, exact_energies, marker="o", label="Exact")
+    plt.plot(bond_lengths, vqe_energies, marker="s", label="VQE")
+    plt.xlabel("Bond length (Angstrom)")
+    plt.ylabel("Energy")
+    plt.title(title)
+    plt.legend()
+    plt.tight_layout()
+
+    if output_path is not None:
+        plt.savefig(output_path, dpi=300, bbox_inches="tight")
+
+    plt.close()
