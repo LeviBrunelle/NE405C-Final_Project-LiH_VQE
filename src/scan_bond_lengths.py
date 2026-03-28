@@ -1,74 +1,38 @@
-"""
-scan_bond_lengths.py
---------------------
-Sweep over a range of Li–H bond lengths, compute the ground-state energy with
-both VQE and exact diagonalisation at each geometry, and write results to CSV.
-"""
+from __future__ import annotations
 
-import os
+from typing import Any
 
-import numpy as np
-import pandas as pd
-
-from src.build_hamiltonian import build_hamiltonian
-from src.run_exact import run_exact
-from src.run_vqe import run_vqe
+from .build_hamiltonian import get_problem_bundle, summarize_problem
+from .run_exact import run_exact
+from .run_vqe import run_vqe
 
 
 def scan_bond_lengths(
-    bond_lengths=None,
-    output_file: str = "results/energies.csv",
-    run_vqe_flag: bool = True,
-) -> pd.DataFrame:
-    """Scan bond lengths and collect VQE and exact ground-state energies.
+    bond_lengths: list[float],
+    reps: int,
+    simplify_hamiltonian: bool = True,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
 
-    Parameters
-    ----------
-    bond_lengths : array-like, optional
-        Sequence of Li–H bond lengths in Angstroms to evaluate.
-        Defaults to a grid from 1.0 Å to 3.8 Å in steps of 0.2 Å.
-    output_file : str, optional
-        Path to the CSV file where results are saved (default
-        ``results/energies.csv``).
-    run_vqe_flag : bool, optional
-        When ``False``, skip the VQE calculation and record NaN for the VQE
-        energy.  Useful for quickly generating the exact reference curve.
+    for bond_length in bond_lengths:
+        bundle = get_problem_bundle(bond_length=bond_length, simplify=simplify_hamiltonian)
+        problem = bundle["problem"]
+        qubit_hamiltonian = bundle["qubit_hamiltonian"]
 
-    Returns
-    -------
-    df : pd.DataFrame
-        DataFrame with columns ``bond_length``, ``vqe_energy``, and
-        ``exact_energy``.
-    """
-    if bond_lengths is None:
-        bond_lengths = np.arange(1.0, 4.0, 0.2)
+        exact = run_exact(qubit_hamiltonian)
+        vqe = run_vqe(qubit_hamiltonian, reps=reps)
 
-    os.makedirs(os.path.dirname(output_file) or ".", exist_ok=True)
+        summary = summarize_problem(problem, qubit_hamiltonian, bond_length)
 
-    records = []
-    for r in bond_lengths:
-        print(f"Bond length {r:.2f} Å …", flush=True)
-        qubit_op, problem, mapper = build_hamiltonian(r)
-
-        exact_energy = run_exact(qubit_op, problem)
-        print(f"  Exact  : {exact_energy:.6f} Ha", flush=True)
-
-        if run_vqe_flag:
-            vqe_energy, _ = run_vqe(qubit_op, problem, mapper)
-            print(f"  VQE    : {vqe_energy:.6f} Ha", flush=True)
-        else:
-            vqe_energy = float("nan")
-
-        records.append(
+        rows.append(
             {
-                "bond_length": round(float(r), 4),
-                "vqe_energy": vqe_energy,
-                "exact_energy": exact_energy,
+                **summary,
+                "exact_energy": exact["energy"],
+                "vqe_energy": vqe["energy"],
+                "absolute_error": abs(vqe["energy"] - exact["energy"]),
+                "ansatz_num_parameters": vqe["ansatz_num_parameters"],
+                "ansatz_depth": vqe["ansatz_depth"],
             }
         )
 
-    df = pd.DataFrame(records, columns=["bond_length", "vqe_energy", "exact_energy"])
-    df.to_csv(output_file, index=False)
-    print(f"Results saved to {output_file}", flush=True)
-
-    return df
+    return rows
