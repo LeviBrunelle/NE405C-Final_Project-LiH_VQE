@@ -56,7 +56,7 @@ def main() -> None:
 
     summary = summarize_problem(problem, qubit_hamiltonian, DEFAULT_BOND_LENGTH)
     exact = run_exact(qubit_hamiltonian)
-    vqe = run_vqe(qubit_hamiltonian, reps=DEFAULT_REPS)
+    vqe = run_vqe(qubit_hamiltonian, reps=DEFAULT_REPS, show_progress=True)
 
     single_run_summary = {
         **summary,

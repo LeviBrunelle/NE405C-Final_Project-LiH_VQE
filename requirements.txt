@@ -3,3 +3,5 @@ qiskit-algorithms==0.4.0
 qiskit-nature==0.7.2
 pyscf
 matplotlib
+tqdm
+pylatexenc
