@@ -1,58 +1,73 @@
-"""
-run_vqe.py
-----------
-Run the Variational Quantum Eigensolver (VQE) on a qubit Hamiltonian and return
-the estimated ground-state energy (including nuclear repulsion).
+from __future__ import annotations
 
-The hardware-efficient EfficientSU2 ansatz is used together with the SLSQP
-classical optimizer.
-"""
+from typing import Any
 
-import numpy as np
-
-from qiskit.circuit.library import EfficientSU2
 from qiskit.primitives import StatevectorEstimator
 from qiskit_algorithms import VQE
-from qiskit_algorithms.optimizers import SLSQP
+from qiskit_algorithms.optimizers import COBYLA
+from qiskit.circuit.library import n_local
+
+from .config import (
+    COBYLA_MAXITER,
+    DEFAULT_REPS,
+    ENTANGLEMENT_BLOCK,
+    ENTANGLEMENT_PATTERN,
+    OPTIMIZER_NAME,
+    ROTATION_BLOCKS,
+)
 
 
-def run_vqe(qubit_op, problem, mapper, reps: int = 2, max_iter: int = 500):
-    """Estimate the LiH ground-state energy using VQE.
+def build_ansatz(num_qubits: int, reps: int = DEFAULT_REPS):
+    return n_local(
+        num_qubits=num_qubits,
+        rotation_blocks=ROTATION_BLOCKS,
+        entanglement_blocks=ENTANGLEMENT_BLOCK,
+        entanglement=ENTANGLEMENT_PATTERN,
+        reps=reps,
+    )
 
-    Parameters
-    ----------
-    qubit_op : SparsePauliOp
-        The qubit Hamiltonian to minimize.
-    problem : ElectronicStructureProblem
-        The electronic-structure problem (used to retrieve the nuclear
-        repulsion energy).
-    mapper : ParityMapper
-        The mapper used when building *qubit_op* (kept for API consistency).
-    reps : int, optional
-        Number of repetition layers in the EfficientSU2 ansatz (default 2).
-    max_iter : int, optional
-        Maximum number of optimizer iterations (default 500).
 
-    Returns
-    -------
-    total_energy : float
-        Electronic + nuclear-repulsion ground-state energy in Hartree.
-    result : MinimumEigensolverResult
-        Raw VQE result object for inspection.
-    """
-    ansatz = EfficientSU2(qubit_op.num_qubits, reps=reps, entanglement="linear")
+def build_optimizer():
+    if OPTIMIZER_NAME != "COBYLA":
+        raise ValueError(f"Unsupported optimizer: {OPTIMIZER_NAME}")
+    return COBYLA(maxiter=COBYLA_MAXITER)
 
-    # Initialise parameters near zero to help the optimizer
-    rng = np.random.default_rng(seed=42)
-    initial_point = rng.uniform(-np.pi / 4, np.pi / 4, ansatz.num_parameters)
 
-    optimizer = SLSQP(maxiter=max_iter)
+def run_vqe(qubit_hamiltonian: Any, reps: int = DEFAULT_REPS) -> dict[str, Any]:
+    ansatz = build_ansatz(num_qubits=qubit_hamiltonian.num_qubits, reps=reps)
     estimator = StatevectorEstimator()
+    optimizer = build_optimizer()
 
-    vqe = VQE(estimator, ansatz, optimizer, initial_point=initial_point)
-    result = vqe.compute_minimum_eigenvalue(qubit_op)
+    counts: list[int] = []
+    energies: list[float] = []
 
-    nuclear_repulsion = problem.nuclear_repulsion_energy
-    total_energy = float(result.eigenvalue.real) + nuclear_repulsion
+    def callback(eval_count, parameters, mean, metadata):
+        counts.append(int(eval_count))
+        energies.append(float(mean))
 
-    return total_energy, result
+    solver = VQE(
+        estimator=estimator,
+        ansatz=ansatz,
+        optimizer=optimizer,
+        callback=callback,
+    )
+
+    result = solver.compute_minimum_eigenvalue(qubit_hamiltonian)
+
+    return {
+        "energy": float(result.eigenvalue.real),
+        "optimal_point": [float(x) for x in result.optimal_point],
+        "counts": counts,
+        "energies": energies,
+        "ansatz_num_qubits": int(ansatz.num_qubits),
+        "ansatz_num_parameters": int(ansatz.num_parameters),
+        "ansatz_depth": int(ansatz.decompose().depth()),
+        "ansatz": ansatz,
+    }
+
+
+def run_reps_experiment(qubit_hamiltonian: Any, reps_values: list[int]) -> dict[int, dict[str, Any]]:
+    results: dict[int, dict[str, Any]] = {}
+    for reps in reps_values:
+        results[reps] = run_vqe(qubit_hamiltonian=qubit_hamiltonian, reps=reps)
+    return results
