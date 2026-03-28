@@ -1,0 +1,38 @@
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+RESULTS_DIR = PROJECT_ROOT / "results"
+
+MOLECULE_NAME = "LiH"
+BASIS = "sto3g"
+CHARGE = 0
+SPIN = 0
+
+DEFAULT_BOND_LENGTH = 1.6
+BOND_LENGTHS = [1.0, 1.5, 2.0, 2.5, 3.0]
+
+MAPPER_NAME = "jordan_wigner"
+
+ROTATION_BLOCKS = ["ry", "rz"]
+ENTANGLEMENT_BLOCK = "cx"
+ENTANGLEMENT_PATTERN = "linear"
+DEFAULT_REPS = 2
+REPS_EXPERIMENT = [1, 2, 3]
+
+OPTIMIZER_NAME = "COBYLA"
+COBYLA_MAXITER = 200
+
+ANSATZ_FOLD = 50
+FIG_DPI = 300
+PREVIEW_TERM_COUNT = 15
+
+SAVE_HAMILTONIAN_PREVIEW = True
+SAVE_CONVERGENCE_PLOT = True
+SAVE_REPS_OVERLAY_PLOT = True
+SAVE_BOND_SCAN_PLOT = True
+SAVE_ANSATZ_FIGURE = True
+
+
+def ensure_results_dir() -> Path:
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    return RESULTS_DIR
