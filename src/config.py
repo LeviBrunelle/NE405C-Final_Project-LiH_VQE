@@ -13,8 +13,6 @@ BOND_LENGTHS = [1.0, 1.5, 2.0, 2.5, 3.0]
 
 MAPPER_NAME = "jordan_wigner"
 
-ROTATION_BLOCKS = ["ry", "rz"]
-ENTANGLEMENT_BLOCK = "cx"
 ENTANGLEMENT_PATTERN = "linear"
 DEFAULT_REPS = 2
 REPS_EXPERIMENT = [1, 2, 3]

@@ -1,17 +1,12 @@
-# Python bytecode
 __pycache__/
-*.py[cod]
-*$py.class
-
-# Virtual environments
+*.pyc
+.ipynb_checkpoints/
 .venv/
 venv/
-env/
+.env
 
-# Distribution / packaging
-dist/
-build/
-*.egg-info/
+results/*.png
+results/*.json
+results/*.csv
 
-# Results (re-generated on each run)
-results/energy_curve.png
+.DS_Store

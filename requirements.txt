@@ -1,8 +1,5 @@
-qiskit>=1.4.2
-qiskit-nature[pyscf]>=0.7.2
-qiskit-algorithms>=0.3.1
-qiskit-aer>=0.15.0
-numpy>=1.26.0
-scipy>=1.13.0
-matplotlib>=3.9.0
-pandas>=2.2.0
+qiskit==2.0.3
+qiskit-algorithms==0.4.0
+qiskit-nature==0.7.2
+pyscf
+matplotlib

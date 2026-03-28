@@ -2,29 +2,60 @@ from __future__ import annotations
 
 from typing import Any
 
+from qiskit import QuantumCircuit
+from qiskit.circuit import ParameterVector
 from qiskit.primitives import StatevectorEstimator
 from qiskit_algorithms import VQE
 from qiskit_algorithms.optimizers import COBYLA
-from qiskit.circuit.library import n_local
 
 from .config import (
     COBYLA_MAXITER,
     DEFAULT_REPS,
-    ENTANGLEMENT_BLOCK,
     ENTANGLEMENT_PATTERN,
     OPTIMIZER_NAME,
-    ROTATION_BLOCKS,
 )
 
 
-def build_ansatz(num_qubits: int, reps: int = DEFAULT_REPS):
-    return n_local(
-        num_qubits=num_qubits,
-        rotation_blocks=ROTATION_BLOCKS,
-        entanglement_blocks=ENTANGLEMENT_BLOCK,
-        entanglement=ENTANGLEMENT_PATTERN,
-        reps=reps,
-    )
+def build_ansatz(num_qubits: int, reps: int = DEFAULT_REPS) -> QuantumCircuit:
+    """
+    Build a simple hardware-efficient ansatz manually.
+
+    Structure per repetition:
+    - Ry layer on all qubits
+    - Rz layer on all qubits
+    - entangling CX layer
+
+    This avoids Qiskit circuit-library API/version issues.
+    """
+    if ENTANGLEMENT_PATTERN not in {"linear", "circular"}:
+        raise ValueError(
+            f"Unsupported entanglement pattern: {ENTANGLEMENT_PATTERN}. "
+            "Use 'linear' or 'circular'."
+        )
+
+    qc = QuantumCircuit(num_qubits)
+
+    num_rotation_params = reps * num_qubits * 2
+    theta = ParameterVector("theta", num_rotation_params)
+
+    param_index = 0
+
+    for _ in range(reps):
+        for q in range(num_qubits):
+            qc.ry(theta[param_index], q)
+            param_index += 1
+
+        for q in range(num_qubits):
+            qc.rz(theta[param_index], q)
+            param_index += 1
+
+        for q in range(num_qubits - 1):
+            qc.cx(q, q + 1)
+
+        if ENTANGLEMENT_PATTERN == "circular" and num_qubits > 2:
+            qc.cx(num_qubits - 1, 0)
+
+    return qc
 
 
 def build_optimizer():
@@ -61,7 +92,7 @@ def run_vqe(qubit_hamiltonian: Any, reps: int = DEFAULT_REPS) -> dict[str, Any]:
         "energies": energies,
         "ansatz_num_qubits": int(ansatz.num_qubits),
         "ansatz_num_parameters": int(ansatz.num_parameters),
-        "ansatz_depth": int(ansatz.decompose().depth()),
+        "ansatz_depth": int(ansatz.depth()),
         "ansatz": ansatz,
     }
 
