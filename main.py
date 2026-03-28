@@ -16,18 +16,31 @@ from src.config import (
     DEFAULT_BOND_LENGTH,
     DEFAULT_REPS,
     FIG_DPI,
+    OPTIMIZERS_TO_COMPARE,
+    OPTIMIZER_NAME,
     PREVIEW_TERM_COUNT,
     REPS_EXPERIMENT,
     SAVE_ANSATZ_FIGURE,
+    SAVE_BOND_ERROR_PLOT,
     SAVE_BOND_SCAN_PLOT,
     SAVE_CONVERGENCE_PLOT,
     SAVE_HAMILTONIAN_PREVIEW,
+    SAVE_OPTIMIZER_OVERLAY_PLOT,
+    SAVE_REPS_ERROR_PLOT,
     SAVE_REPS_OVERLAY_PLOT,
+    USE_TQDM,
     ensure_results_dir,
 )
-from src.plot_results import plot_bond_scan, plot_convergence, plot_reps_overlay
+from src.plot_results import (
+    plot_bond_error,
+    plot_bond_scan,
+    plot_convergence,
+    plot_optimizer_overlay,
+    plot_reps_error,
+    plot_reps_overlay,
+)
 from src.run_exact import run_exact
-from src.run_vqe import build_ansatz, run_reps_experiment, run_vqe
+from src.run_vqe import build_ansatz, run_optimizer_experiment, run_reps_experiment, run_vqe
 from src.scan_bond_lengths import scan_bond_lengths
 
 
@@ -56,10 +69,16 @@ def main() -> None:
 
     summary = summarize_problem(problem, qubit_hamiltonian, DEFAULT_BOND_LENGTH)
     exact = run_exact(qubit_hamiltonian)
-    vqe = run_vqe(qubit_hamiltonian, reps=DEFAULT_REPS, show_progress=True)
+    vqe = run_vqe(
+        qubit_hamiltonian,
+        reps=DEFAULT_REPS,
+        optimizer_name=OPTIMIZER_NAME,
+        show_progress=USE_TQDM,
+    )
 
     single_run_summary = {
         **summary,
+        "optimizer_name": OPTIMIZER_NAME,
         "exact_energy": exact["energy"],
         "vqe_energy": vqe["energy"],
         "absolute_error": abs(vqe["energy"] - exact["energy"]),
@@ -90,13 +109,22 @@ def main() -> None:
 
     if SAVE_ANSATZ_FIGURE:
         ansatz = build_ansatz(qubit_hamiltonian.num_qubits, reps=DEFAULT_REPS)
-        fig = ansatz.decompose().draw(output="mpl", fold=ANSATZ_FOLD)
-        fig.savefig(results_dir / "lih_ansatz_circuit.png", dpi=FIG_DPI, bbox_inches="tight")
+        try:
+            fig = ansatz.decompose().draw(output="mpl", fold=ANSATZ_FOLD)
+            fig.savefig(results_dir / "lih_ansatz_circuit.png", dpi=FIG_DPI, bbox_inches="tight")
+        except Exception as exc:
+            print(f"Warning: could not save ansatz figure: {exc}")
 
-    reps_results = run_reps_experiment(qubit_hamiltonian, reps_values=REPS_EXPERIMENT)
+    reps_results = run_reps_experiment(
+        qubit_hamiltonian,
+        reps_values=REPS_EXPERIMENT,
+        optimizer_name=OPTIMIZER_NAME,
+        show_progress=USE_TQDM,
+    )
 
     reps_summary = {
         reps: {
+            "optimizer_name": OPTIMIZER_NAME,
             "energy": data["energy"],
             "absolute_error": abs(data["energy"] - exact["energy"]),
             "ansatz_num_parameters": data["ansatz_num_parameters"],
@@ -113,13 +141,56 @@ def main() -> None:
             output_path=results_dir / "lih_reps_overlay.png",
         )
 
-    bond_scan_rows = scan_bond_lengths(BOND_LENGTHS, reps=DEFAULT_REPS, simplify_hamiltonian=True)
+    if SAVE_REPS_ERROR_PLOT:
+        plot_reps_error(
+            reps_summary=reps_summary,
+            output_path=results_dir / "lih_reps_error.png",
+        )
+
+    optimizer_results = run_optimizer_experiment(
+        qubit_hamiltonian,
+        optimizer_names=OPTIMIZERS_TO_COMPARE,
+        reps=DEFAULT_REPS,
+        show_progress=USE_TQDM,
+    )
+
+    optimizer_summary = {
+        optimizer_name: {
+            "energy": data["energy"],
+            "absolute_error": abs(data["energy"] - exact["energy"]),
+            "ansatz_num_parameters": data["ansatz_num_parameters"],
+            "ansatz_depth": data["ansatz_depth"],
+        }
+        for optimizer_name, data in optimizer_results.items()
+    }
+    write_json(results_dir / "optimizer_experiment_summary.json", optimizer_summary)
+
+    if SAVE_OPTIMIZER_OVERLAY_PLOT:
+        plot_optimizer_overlay(
+            histories=optimizer_results,
+            exact_energy=exact["energy"],
+            output_path=results_dir / "lih_optimizer_overlay.png",
+        )
+
+    bond_scan_rows = scan_bond_lengths(
+        BOND_LENGTHS,
+        reps=DEFAULT_REPS,
+        optimizer_name=OPTIMIZER_NAME,
+        simplify_hamiltonian=True,
+        show_progress=USE_TQDM,
+    )
     write_csv(results_dir / "bond_scan.csv", bond_scan_rows)
 
     if SAVE_BOND_SCAN_PLOT:
         plot_bond_scan(
             rows=bond_scan_rows,
             output_path=results_dir / "lih_bond_scan.png",
+        )
+
+    if SAVE_BOND_ERROR_PLOT:
+        plot_bond_error(
+            rows=bond_scan_rows,
+            output_path=results_dir / "lih_bond_error.png",
         )
 
     print("Single-run summary:")
@@ -129,6 +200,10 @@ def main() -> None:
     print("\nReps experiment summary:")
     for reps, row in reps_summary.items():
         print(f"reps={reps}: {row}")
+
+    print("\nOptimizer experiment summary:")
+    for optimizer_name, row in optimizer_summary.items():
+        print(f"{optimizer_name}: {row}")
 
     print("\nSaved outputs to:", results_dir)
 
