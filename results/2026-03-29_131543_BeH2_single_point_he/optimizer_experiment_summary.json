@@ -1,0 +1,20 @@
+{
+  "COBYLA": {
+    "energy": -18.107149232501072,
+    "absolute_error": 0.25872839058598984,
+    "ansatz_num_parameters": 56,
+    "ansatz_depth": 19
+  },
+  "SPSA": {
+    "energy": -18.099928400014964,
+    "absolute_error": 0.26594922307209856,
+    "ansatz_num_parameters": 56,
+    "ansatz_depth": 19
+  },
+  "GRADIENT_DESCENT": {
+    "energy": -17.552890295396818,
+    "absolute_error": 0.8129873276902444,
+    "ansatz_num_parameters": 56,
+    "ansatz_depth": 19
+  }
+}

@@ -6,12 +6,23 @@ from qiskit_nature.units import DistanceUnit
 from qiskit_nature.second_q.drivers import PySCFDriver
 from qiskit_nature.second_q.mappers import JordanWignerMapper
 
-from .config import BASIS, CHARGE, PREVIEW_TERM_COUNT, SPIN
+from .config import BASIS, CHARGE, MOLECULE_NAME, PREVIEW_TERM_COUNT, SPIN
+
+
+def build_geometry(bond_length: float) -> str:
+    if MOLECULE_NAME == "LiH":
+        return f"Li 0 0 0; H 0 0 {bond_length}"
+
+    if MOLECULE_NAME == "BeH2":
+        # linear BeH2, symmetric about Be
+        return f"H 0 0 {-bond_length}; Be 0 0 0; H 0 0 {bond_length}"
+
+    raise ValueError(f"Unsupported molecule: {MOLECULE_NAME}")
 
 
 def build_driver(bond_length: float, basis: str | None = None) -> PySCFDriver:
     return PySCFDriver(
-        atom=f"Li 0 0 0; H 0 0 {bond_length}",
+        atom=build_geometry(bond_length),
         basis=basis or BASIS,
         charge=CHARGE,
         spin=SPIN,
@@ -95,6 +106,7 @@ def preview_qubit_terms(qubit_hamiltonian: Any, limit: int = PREVIEW_TERM_COUNT)
 
 def summarize_problem(problem: Any, qubit_hamiltonian: Any, bond_length: float, basis: str) -> dict[str, Any]:
     return {
+        "molecule_name": MOLECULE_NAME,
         "bond_length_angstrom": bond_length,
         "basis": basis,
         "num_spatial_orbitals": int(problem.num_spatial_orbitals),

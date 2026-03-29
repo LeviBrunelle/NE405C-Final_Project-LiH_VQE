@@ -149,6 +149,7 @@ def main() -> None:
     qubit_hamiltonian = bundle["qubit_hamiltonian"]
 
     summary = summarize_problem(problem, qubit_hamiltonian, DEFAULT_BOND_LENGTH, BASIS)
+    molecule_name = summary["molecule_name"]
     exact = run_exact(qubit_hamiltonian)
 
     if SAVE_HAMILTONIAN_PREVIEW:
@@ -195,8 +196,8 @@ def main() -> None:
                 counts=vqe["counts"],
                 energies=vqe["energies"],
                 exact_energy=exact["energy"],
-                output_path=results_dir / "lih_vqe_convergence.png",
-                title="VQE convergence for LiH",
+                output_path=results_dir / f"{molecule_name.lower()}_vqe_convergence.png",
+                title=f"VQE convergence for {molecule_name}",
             )
 
         if SAVE_ANSATZ_FIGURE:
@@ -209,7 +210,7 @@ def main() -> None:
             )
             try:
                 fig = ansatz.decompose().draw(output="mpl", fold=ANSATZ_FOLD)
-                fig.savefig(results_dir / "lih_ansatz_circuit.png", dpi=FIG_DPI, bbox_inches="tight")
+                fig.savefig(results_dir / f"{molecule_name.lower()}_ansatz_circuit.png", dpi=FIG_DPI, bbox_inches="tight")
             except Exception as exc:
                 print(f"Warning: could not save ansatz figure: {exc}")
 
@@ -386,15 +387,15 @@ def main() -> None:
         if SAVE_BOND_SCAN_PLOT:
             plot_bond_scan(
                 rows=bond_scan_rows,
-                output_path=results_dir / "lih_bond_scan.png",
-                title="LiH energy vs bond length",
+                output_path=results_dir / f"{molecule_name.lower()}_bond_scan.png",
+                title=f"{molecule_name} energy vs bond length",
             )
 
         if SAVE_BOND_ERROR_PLOT:
             plot_bond_error(
                 rows=bond_scan_rows,
-                output_path=results_dir / "lih_bond_error.png",
-                title="VQE absolute error vs bond length",
+                output_path=results_dir / f"{molecule_name.lower()}_bond_error.png",
+                title=f"VQE absolute error vs bond length",
             )
 
     if RUN_BASIS_COMPARISON:
