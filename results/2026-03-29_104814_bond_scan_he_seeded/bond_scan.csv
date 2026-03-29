@@ -1,0 +1,6 @@
+bond_length_angstrom,basis,num_spatial_orbitals,num_spin_orbitals,num_particles_alpha,num_particles_beta,num_qubits,num_pauli_terms,optimizer_name,ansatz_mode,exact_energy,vqe_energy,absolute_error,ansatz_num_parameters,ansatz_depth
+1.0,sto3g,6,12,2,2,12,631,COBYLA,hardware_efficient,-9.371991912791223,-8.88960268353406,0.4823892292571639,48,17
+1.5,sto3g,6,12,2,2,12,631,COBYLA,hardware_efficient,-8.940716708638703,-8.623580981795651,0.3171357268430519,48,17
+2.0,sto3g,6,12,2,2,12,631,COBYLA,hardware_efficient,-8.65485358886147,-7.996579071063007,0.6582745177984641,48,17
+2.5,sto3g,6,12,2,2,12,631,COBYLA,hardware_efficient,-8.458736536571646,-7.883200880185611,0.5755356563860348,48,17
+3.0,sto3g,6,12,2,2,12,631,COBYLA,hardware_efficient,-8.328020370422404,-7.6937047740029945,0.6343155964194098,48,17

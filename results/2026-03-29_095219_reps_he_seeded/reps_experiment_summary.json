@@ -1,0 +1,26 @@
+{
+  "1": {
+    "optimizer_name": "COBYLA",
+    "ansatz_mode": "hardware_efficient",
+    "energy": -8.047813687293674,
+    "absolute_error": 0.8267179620648495,
+    "ansatz_num_parameters": 24,
+    "ansatz_depth": 13
+  },
+  "2": {
+    "optimizer_name": "COBYLA",
+    "ansatz_mode": "hardware_efficient",
+    "energy": -8.382364820012516,
+    "absolute_error": 0.492166829346008,
+    "ansatz_num_parameters": 48,
+    "ansatz_depth": 17
+  },
+  "3": {
+    "optimizer_name": "COBYLA",
+    "ansatz_mode": "hardware_efficient",
+    "energy": -7.644168580340075,
+    "absolute_error": 1.2303630690184484,
+    "ansatz_num_parameters": 72,
+    "ansatz_depth": 21
+  }
+}

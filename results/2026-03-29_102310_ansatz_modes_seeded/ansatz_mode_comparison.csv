@@ -1,0 +1,3 @@
+bond_length_angstrom,basis,num_spatial_orbitals,num_spin_orbitals,num_particles_alpha,num_particles_beta,num_qubits,num_pauli_terms,ansatz_mode,optimizer_name,exact_energy,vqe_energy,absolute_error,ansatz_num_parameters,ansatz_depth
+1.6,sto3g,6,12,2,2,12,631,hardware_efficient,COBYLA,-8.874531649358527,-8.39704696629483,0.47748468306369674,48,17
+1.6,sto3g,6,12,2,2,12,631,uccsd_hf,COBYLA,-8.874531649358527,-8.868475919059687,0.00605573029883999,92,93

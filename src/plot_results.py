@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 def plot_convergence(
@@ -16,7 +17,8 @@ def plot_convergence(
     plt.plot(counts, energies, marker="o", markersize=3, label="VQE")
     plt.axhline(exact_energy, linestyle="--", label="Exact energy")
     plt.xlabel("Evaluation count")
-    plt.ylabel("Energy")
+    plt.ylabel("Energy (Hartree)")
+    plt.grid()
     plt.title(title)
     plt.legend()
     plt.tight_layout()
@@ -46,7 +48,8 @@ def plot_reps_overlay(
 
     plt.axhline(exact_energy, linestyle="--", label="Exact energy")
     plt.xlabel("Evaluation count")
-    plt.ylabel("Energy")
+    plt.ylabel("Energy (Hartree)")
+    plt.grid()
     plt.title(title)
     plt.legend()
     plt.tight_layout()
@@ -76,7 +79,8 @@ def plot_optimizer_overlay(
 
     plt.axhline(exact_energy, linestyle="--", label="Exact energy")
     plt.xlabel("Evaluation count")
-    plt.ylabel("Energy")
+    plt.ylabel("Energy (Hartree)")
+    plt.grid()
     plt.title(title)
     plt.legend()
     plt.tight_layout()
@@ -100,9 +104,10 @@ def plot_bond_scan(
     plt.plot(bond_lengths, exact_energies, marker="o", label="Exact")
     plt.plot(bond_lengths, vqe_energies, marker="s", label="VQE")
     plt.xlabel("Bond length (Angstrom)")
-    plt.ylabel("Energy")
+    plt.ylabel("Energy (Hartree)")
     plt.title(title)
     plt.legend()
+    plt.grid()
     plt.tight_layout()
 
     if output_path is not None:
@@ -125,6 +130,7 @@ def plot_bond_error(
     plt.ylabel("Absolute error")
     plt.title(title)
     plt.tight_layout()
+    plt.grid()
 
     if output_path is not None:
         plt.savefig(output_path, dpi=300, bbox_inches="tight")
@@ -146,8 +152,211 @@ def plot_reps_error(
     plt.ylabel("Absolute error")
     plt.title(title)
     plt.tight_layout()
+    plt.grid()
+    if output_path is not None:
+        plt.savefig(output_path, dpi=300, bbox_inches="tight")
+
+    plt.close()
+
+def plot_basis_error(
+    rows: list[dict],
+    output_path: str | Path | None = None,
+    title: str = "Absolute error vs basis set",
+) -> None:
+    basis_labels = [row["basis"] for row in rows]
+    errors = [row["absolute_error"] for row in rows]
+
+    plt.figure(figsize=(8, 5))
+    plt.plot(basis_labels, errors, marker="o")
+    plt.xlabel("Basis set")
+    plt.ylabel("Absolute error")
+    plt.title(title)
+    plt.tight_layout()
+    plt.grid()
 
     if output_path is not None:
         plt.savefig(output_path, dpi=300, bbox_inches="tight")
 
     plt.close()
+
+
+def plot_ansatz_mode_error(
+    rows: list[dict],
+    output_path: str | Path | None = None,
+    title: str = "Absolute error vs ansatz mode",
+) -> None:
+    labels = [row["ansatz_mode"] for row in rows]
+    errors = [row["absolute_error"] for row in rows]
+
+    plt.figure(figsize=(8, 5))
+    plt.plot(labels, errors, marker="o")
+    plt.xlabel("Ansatz mode")
+    plt.ylabel("Absolute error")
+    plt.title(title)
+    plt.tight_layout()
+    plt.grid()
+    
+    if output_path is not None:
+        plt.savefig(output_path, dpi=300, bbox_inches="tight")
+
+    plt.close()
+
+
+def plot_repeated_trials_mean_std(
+    trial_results: list[dict],
+    exact_energy: float,
+    output_path: str | Path | None = None,
+    title: str = "Repeated-trial VQE convergence",
+) -> None:
+    if not trial_results:
+        return
+
+    min_len = min(len(result["energies"]) for result in trial_results)
+    if min_len == 0:
+        return
+
+    energy_matrix = np.array([result["energies"][:min_len] for result in trial_results], dtype=float)
+    x = np.arange(1, min_len + 1)
+
+    mean_energy = energy_matrix.mean(axis=0)
+    std_energy = energy_matrix.std(axis=0)
+
+    final_energies = np.array([result["energy"] for result in trial_results], dtype=float)
+    final_std = final_energies.std()
+
+    plt.figure(figsize=(8, 5))
+    plt.plot(x, mean_energy, label=f"Mean energy (final std={final_std:.4f} Ha)")
+    plt.fill_between(x, mean_energy - std_energy, mean_energy + std_energy, alpha=0.25, label="±1 std band")
+    plt.axhline(exact_energy, linestyle="--", label="Exact energy")
+    plt.xlabel("Evaluation index")
+    plt.ylabel("Energy (Hartree)")
+    plt.title(title)
+    plt.legend()
+    plt.tight_layout()
+
+    if output_path is not None:
+        plt.savefig(output_path, dpi=300, bbox_inches="tight")
+
+    plt.close()
+
+
+def plot_repeated_trials_comparison(
+    grouped_trial_results: dict[str, list[dict]],
+    exact_energy: float,
+    output_path: str | Path | None = None,
+    title: str = "Repeated-trial VQE comparison",
+) -> None:
+    plt.figure(figsize=(8, 5))
+
+    for label, trial_results in grouped_trial_results.items():
+        if not trial_results:
+            continue
+
+        min_len = min(len(result["energies"]) for result in trial_results)
+        if min_len == 0:
+            continue
+
+        energy_matrix = np.array([result["energies"][:min_len] for result in trial_results], dtype=float)
+        x = np.arange(1, min_len + 1)
+
+        mean_energy = energy_matrix.mean(axis=0)
+        std_energy = energy_matrix.std(axis=0)
+
+        final_energies = np.array([result["energy"] for result in trial_results], dtype=float)
+        final_std = final_energies.std()
+
+        plt.plot(x, mean_energy, label=f"{label} (final std={final_std:.4f} Ha)")
+        plt.fill_between(x, mean_energy - std_energy, mean_energy + std_energy, alpha=0.15)
+
+    plt.axhline(exact_energy, linestyle="--", label="Exact energy")
+    plt.xlabel("Evaluation index")
+    plt.ylabel("Energy (Hartree)")
+    plt.title(title)
+    plt.legend()
+    plt.tight_layout()
+
+    if output_path is not None:
+        plt.savefig(output_path, dpi=300, bbox_inches="tight")
+
+    plt.close()
+
+
+def plot_ansatz_mode_overlay(
+    histories: dict[str, dict],
+    exact_energy: float,
+    output_path: str | Path | None = None,
+    title: str = "VQE convergence with different ansatz modes",
+) -> None:
+    plt.figure(figsize=(8, 5))
+
+    for ansatz_mode, data in histories.items():
+        plt.plot(
+            data["counts"],
+            data["energies"],
+            marker="o",
+            markersize=3,
+            label=ansatz_mode,
+        )
+
+    plt.axhline(exact_energy, linestyle="--", label="Exact energy")
+    plt.xlabel("Evaluation count")
+    plt.ylabel("Energy (Hartree)")
+    plt.title(title)
+    plt.legend()
+    plt.tight_layout()
+
+    if output_path is not None:
+        plt.savefig(output_path, dpi=300, bbox_inches="tight")
+
+    plt.close()
+
+
+def plot_ansatz_mode_final_energy(
+    rows: list[dict],
+    output_path: str | Path | None = None,
+    title: str = "Final energy vs ansatz mode",
+) -> None:
+    labels = [row["ansatz_mode"] for row in rows]
+    energies = [row["vqe_energy"] for row in rows]
+    exact_energy = rows[0]["exact_energy"] if rows else None
+
+    plt.figure(figsize=(8, 5))
+    plt.bar(labels, energies)
+
+    if exact_energy is not None:
+        plt.axhline(exact_energy, linestyle="--", label="Exact energy")
+        plt.legend()
+
+    plt.xlabel("Ansatz mode")
+    plt.ylabel("Energy (Hartree)")
+    plt.title(title)
+    plt.tight_layout()
+
+    if output_path is not None:
+        plt.savefig(output_path, dpi=300, bbox_inches="tight")
+
+    plt.close()
+
+
+def plot_ansatz_mode_error(
+    rows: list[dict],
+    output_path: str | Path | None = None,
+    title: str = "Absolute error vs ansatz mode",
+) -> None:
+    labels = [row["ansatz_mode"] for row in rows]
+    errors = [row["absolute_error"] for row in rows]
+
+    plt.figure(figsize=(8, 5))
+    plt.bar(labels, errors)
+    plt.xlabel("Ansatz mode")
+    plt.ylabel("Absolute error (Hartree)")
+    plt.title(title)
+    plt.tight_layout()
+
+    if output_path is not None:
+        plt.savefig(output_path, dpi=300, bbox_inches="tight")
+
+    plt.close()
+
+
+

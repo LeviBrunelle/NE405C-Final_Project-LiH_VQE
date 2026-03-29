@@ -2,8 +2,13 @@ from __future__ import annotations
 
 import csv
 import json
+import statistics
+from datetime import datetime
 from pathlib import Path
 
+from tqdm.auto import tqdm
+
+from src import config as project_config
 from src.build_hamiltonian import (
     get_problem_bundle,
     preview_fermionic_terms,
@@ -12,35 +17,69 @@ from src.build_hamiltonian import (
 )
 from src.config import (
     ANSATZ_FOLD,
+    ANSATZ_MODES_TO_COMPARE,
+    BASIS,
+    BASIS_SETS_TO_COMPARE,
     BOND_LENGTHS,
+    DEFAULT_ANSATZ_MODE,
     DEFAULT_BOND_LENGTH,
     DEFAULT_REPS,
     FIG_DPI,
+    MAX_EXACT_QUBITS,
+    NUM_TRIALS,
     OPTIMIZERS_TO_COMPARE,
     OPTIMIZER_NAME,
     PREVIEW_TERM_COUNT,
+    RANDOM_SEED,
     REPS_EXPERIMENT,
+    RUN_ANSATZ_MODE_COMPARISON,
+    RUN_BASIS_COMPARISON,
+    RUN_BOND_SCAN,
+    RUN_LABEL,
+    RUN_OPTIMIZER_EXPERIMENT,
+    RUN_REPEATED_ANSATZ_MODE_EXPERIMENT,
+    RUN_REPEATED_OPTIMIZER_EXPERIMENT,
+    RUN_REPEATED_SINGLE_POINT,
+    RUN_REPS_EXPERIMENT,
+    RUN_SINGLE_POINT,
     SAVE_ANSATZ_FIGURE,
+    SAVE_ANSATZ_MODE_ERROR_PLOT,
+    SAVE_BASIS_ERROR_PLOT,
     SAVE_BOND_ERROR_PLOT,
     SAVE_BOND_SCAN_PLOT,
     SAVE_CONVERGENCE_PLOT,
     SAVE_HAMILTONIAN_PREVIEW,
     SAVE_OPTIMIZER_OVERLAY_PLOT,
+    SAVE_REPEATED_TRIALS_PLOT,
+    SAVE_REPEATED_TRIALS_SUMMARY,
     SAVE_REPS_ERROR_PLOT,
     SAVE_REPS_OVERLAY_PLOT,
     USE_TQDM,
     ensure_results_dir,
 )
 from src.plot_results import (
+    plot_ansatz_mode_error,
+    plot_basis_error,
     plot_bond_error,
     plot_bond_scan,
     plot_convergence,
     plot_optimizer_overlay,
+    plot_repeated_trials_comparison,
+    plot_repeated_trials_mean_std,
     plot_reps_error,
     plot_reps_overlay,
+    plot_ansatz_mode_final_energy,
+    plot_ansatz_mode_overlay,
 )
 from src.run_exact import run_exact
-from src.run_vqe import build_ansatz, run_optimizer_experiment, run_reps_experiment, run_vqe
+from src.run_vqe import (
+    build_ansatz,
+    run_ansatz_mode_experiment,
+    run_optimizer_experiment,
+    run_repeated_trials,
+    run_reps_experiment,
+    run_vqe,
+)
 from src.scan_bond_lengths import scan_bond_lengths
 
 
@@ -59,35 +98,55 @@ def write_csv(path: Path, rows: list[dict]) -> None:
         writer.writerows(rows)
 
 
-def main() -> None:
-    results_dir = ensure_results_dir()
+def make_run_results_dir(base_results_dir: Path, run_label: str) -> Path:
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    run_dir = base_results_dir / f"{timestamp}_{run_label}"
+    run_dir.mkdir(parents=True, exist_ok=False)
+    return run_dir
 
-    bundle = get_problem_bundle(DEFAULT_BOND_LENGTH, simplify=True)
+
+def dump_config_snapshot(path: Path) -> None:
+    snapshot = {}
+    for name in dir(project_config):
+        if name.isupper():
+            value = getattr(project_config, name)
+            if isinstance(value, (str, int, float, bool, list, tuple, type(None))):
+                snapshot[name] = value
+    write_json(path / "config_snapshot.json", snapshot)
+
+
+def summarize_repeated_trials(trial_results: list[dict], exact_energy: float) -> dict:
+    final_energies = [result["energy"] for result in trial_results]
+    abs_errors = [abs(result["energy"] - exact_energy) for result in trial_results]
+
+    return {
+        "num_trials": len(trial_results),
+        "mean_final_energy": statistics.mean(final_energies),
+        "std_final_energy": statistics.pstdev(final_energies) if len(final_energies) > 1 else 0.0,
+        "mean_absolute_error": statistics.mean(abs_errors),
+        "std_absolute_error": statistics.pstdev(abs_errors) if len(abs_errors) > 1 else 0.0,
+        "trial_final_energies": final_energies,
+        "trial_absolute_errors": abs_errors,
+        "trial_seeds": [result["random_seed"] for result in trial_results],
+    }
+
+
+def main() -> None:
+    base_results_dir = ensure_results_dir()
+    results_dir = make_run_results_dir(base_results_dir, RUN_LABEL)
+    dump_config_snapshot(results_dir)
+
+    print(f"Writing results to: {results_dir}")
+    print("[1/9] Building default LiH problem bundle...")
+
+    bundle = get_problem_bundle(DEFAULT_BOND_LENGTH, basis=BASIS, simplify=True)
     problem = bundle["problem"]
+    mapper = bundle["mapper"]
     fermionic_hamiltonian = bundle["fermionic_hamiltonian"]
     qubit_hamiltonian = bundle["qubit_hamiltonian"]
 
-    summary = summarize_problem(problem, qubit_hamiltonian, DEFAULT_BOND_LENGTH)
+    summary = summarize_problem(problem, qubit_hamiltonian, DEFAULT_BOND_LENGTH, BASIS)
     exact = run_exact(qubit_hamiltonian)
-    vqe = run_vqe(
-        qubit_hamiltonian,
-        reps=DEFAULT_REPS,
-        optimizer_name=OPTIMIZER_NAME,
-        show_progress=USE_TQDM,
-    )
-
-    single_run_summary = {
-        **summary,
-        "optimizer_name": OPTIMIZER_NAME,
-        "exact_energy": exact["energy"],
-        "vqe_energy": vqe["energy"],
-        "absolute_error": abs(vqe["energy"] - exact["energy"]),
-        "ansatz_num_parameters": vqe["ansatz_num_parameters"],
-        "ansatz_depth": vqe["ansatz_depth"],
-        "optimal_point": vqe["optimal_point"],
-    }
-
-    write_json(results_dir / "single_run_summary.json", single_run_summary)
 
     if SAVE_HAMILTONIAN_PREVIEW:
         write_json(
@@ -99,111 +158,433 @@ def main() -> None:
             preview_qubit_terms(qubit_hamiltonian, limit=PREVIEW_TERM_COUNT),
         )
 
-    if SAVE_CONVERGENCE_PLOT:
-        plot_convergence(
-            counts=vqe["counts"],
-            energies=vqe["energies"],
-            exact_energy=exact["energy"],
-            output_path=results_dir / "lih_vqe_convergence.png",
+    if RUN_SINGLE_POINT:
+        print("[2/9] Running single-point VQE...")
+        vqe = run_vqe(
+            qubit_hamiltonian,
+            reps=DEFAULT_REPS,
+            optimizer_name=OPTIMIZER_NAME,
+            ansatz_mode=DEFAULT_ANSATZ_MODE,
+            problem=problem,
+            mapper=mapper,
+            show_progress=USE_TQDM,
+            progress_label=f"single {DEFAULT_ANSATZ_MODE} {OPTIMIZER_NAME}",
+            random_seed=RANDOM_SEED,
         )
 
-    if SAVE_ANSATZ_FIGURE:
-        ansatz = build_ansatz(qubit_hamiltonian.num_qubits, reps=DEFAULT_REPS)
-        try:
-            fig = ansatz.decompose().draw(output="mpl", fold=ANSATZ_FOLD)
-            fig.savefig(results_dir / "lih_ansatz_circuit.png", dpi=FIG_DPI, bbox_inches="tight")
-        except Exception as exc:
-            print(f"Warning: could not save ansatz figure: {exc}")
-
-    reps_results = run_reps_experiment(
-        qubit_hamiltonian,
-        reps_values=REPS_EXPERIMENT,
-        optimizer_name=OPTIMIZER_NAME,
-        show_progress=USE_TQDM,
-    )
-
-    reps_summary = {
-        reps: {
+        single_run_summary = {
+            **summary,
             "optimizer_name": OPTIMIZER_NAME,
-            "energy": data["energy"],
-            "absolute_error": abs(data["energy"] - exact["energy"]),
-            "ansatz_num_parameters": data["ansatz_num_parameters"],
-            "ansatz_depth": data["ansatz_depth"],
+            "ansatz_mode": DEFAULT_ANSATZ_MODE,
+            "exact_energy": exact["energy"],
+            "vqe_energy": vqe["energy"],
+            "absolute_error": abs(vqe["energy"] - exact["energy"]),
+            "ansatz_num_parameters": vqe["ansatz_num_parameters"],
+            "ansatz_depth": vqe["ansatz_depth"],
+            "optimal_point": vqe["optimal_point"],
+            "random_seed": RANDOM_SEED,
         }
-        for reps, data in reps_results.items()
-    }
-    write_json(results_dir / "reps_experiment_summary.json", reps_summary)
 
-    if SAVE_REPS_OVERLAY_PLOT:
-        plot_reps_overlay(
-            histories=reps_results,
-            exact_energy=exact["energy"],
-            output_path=results_dir / "lih_reps_overlay.png",
+        write_json(results_dir / "single_run_summary.json", single_run_summary)
+
+        if SAVE_CONVERGENCE_PLOT:
+            plot_convergence(
+                counts=vqe["counts"],
+                energies=vqe["energies"],
+                exact_energy=exact["energy"],
+                output_path=results_dir / "lih_vqe_convergence.png",
+                title="VQE convergence for LiH",
+            )
+
+        if SAVE_ANSATZ_FIGURE:
+            ansatz, _ = build_ansatz(
+                num_qubits=qubit_hamiltonian.num_qubits,
+                reps=DEFAULT_REPS,
+                ansatz_mode=DEFAULT_ANSATZ_MODE,
+                problem=problem,
+                mapper=mapper,
+            )
+            try:
+                fig = ansatz.decompose().draw(output="mpl", fold=ANSATZ_FOLD)
+                fig.savefig(results_dir / "lih_ansatz_circuit.png", dpi=FIG_DPI, bbox_inches="tight")
+            except Exception as exc:
+                print(f"Warning: could not save ansatz figure: {exc}")
+
+        print("Single-run summary:")
+        for key, value in single_run_summary.items():
+            print(f"{key}: {value}")
+
+    if RUN_REPEATED_SINGLE_POINT:
+        print("[3/9] Running repeated single-point trials...")
+        repeated_trials = run_repeated_trials(
+            qubit_hamiltonian=qubit_hamiltonian,
+            num_trials=NUM_TRIALS,
+            reps=DEFAULT_REPS,
+            optimizer_name=OPTIMIZER_NAME,
+            ansatz_mode=DEFAULT_ANSATZ_MODE,
+            problem=problem,
+            mapper=mapper,
+            show_progress=USE_TQDM,
+            base_seed=RANDOM_SEED,
         )
 
-    if SAVE_REPS_ERROR_PLOT:
-        plot_reps_error(
-            reps_summary=reps_summary,
-            output_path=results_dir / "lih_reps_error.png",
-        )
-
-    optimizer_results = run_optimizer_experiment(
-        qubit_hamiltonian,
-        optimizer_names=OPTIMIZERS_TO_COMPARE,
-        reps=DEFAULT_REPS,
-        show_progress=USE_TQDM,
-    )
-
-    optimizer_summary = {
-        optimizer_name: {
-            "energy": data["energy"],
-            "absolute_error": abs(data["energy"] - exact["energy"]),
-            "ansatz_num_parameters": data["ansatz_num_parameters"],
-            "ansatz_depth": data["ansatz_depth"],
+        repeated_summary = {
+            **summary,
+            "optimizer_name": OPTIMIZER_NAME,
+            "ansatz_mode": DEFAULT_ANSATZ_MODE,
+            **summarize_repeated_trials(repeated_trials, exact["energy"]),
         }
-        for optimizer_name, data in optimizer_results.items()
-    }
-    write_json(results_dir / "optimizer_experiment_summary.json", optimizer_summary)
 
-    if SAVE_OPTIMIZER_OVERLAY_PLOT:
-        plot_optimizer_overlay(
-            histories=optimizer_results,
+        if SAVE_REPEATED_TRIALS_SUMMARY:
+            write_json(results_dir / "repeated_single_point_summary.json", repeated_summary)
+
+        if SAVE_REPEATED_TRIALS_PLOT:
+            plot_repeated_trials_mean_std(
+                trial_results=repeated_trials,
+                exact_energy=exact["energy"],
+                output_path=results_dir / "repeated_single_point_mean_std.png",
+                title=f"Repeated trials: {DEFAULT_ANSATZ_MODE} + {OPTIMIZER_NAME}",
+            )
+
+        print("Repeated single-point summary:")
+        for key, value in repeated_summary.items():
+            print(f"{key}: {value}")
+
+    if RUN_REPS_EXPERIMENT:
+        print("[4/9] Running reps experiment...")
+        reps_results = run_reps_experiment(
+            qubit_hamiltonian,
+            reps_values=REPS_EXPERIMENT,
+            optimizer_name=OPTIMIZER_NAME,
+            ansatz_mode=DEFAULT_ANSATZ_MODE,
+            problem=problem,
+            mapper=mapper,
+            show_progress=USE_TQDM,
+        )
+
+        reps_summary = {
+            reps: {
+                "optimizer_name": OPTIMIZER_NAME,
+                "ansatz_mode": DEFAULT_ANSATZ_MODE,
+                "energy": data["energy"],
+                "absolute_error": abs(data["energy"] - exact["energy"]),
+                "ansatz_num_parameters": data["ansatz_num_parameters"],
+                "ansatz_depth": data["ansatz_depth"],
+            }
+            for reps, data in reps_results.items()
+        }
+        write_json(results_dir / "reps_experiment_summary.json", reps_summary)
+
+        if SAVE_REPS_OVERLAY_PLOT:
+            plot_reps_overlay(
+                histories=reps_results,
+                exact_energy=exact["energy"],
+                output_path=results_dir / "lih_reps_overlay.png",
+                title="VQE convergence with different ansatz depths",
+            )
+
+        if SAVE_REPS_ERROR_PLOT:
+            plot_reps_error(
+                reps_summary=reps_summary,
+                output_path=results_dir / "lih_reps_error.png",
+                title="Absolute error vs ansatz depth",
+            )
+
+        print("\nReps experiment summary:")
+        for reps, row in reps_summary.items():
+            print(f"reps={reps}: {row}")
+
+    if RUN_OPTIMIZER_EXPERIMENT:
+        print("[5/9] Running optimizer experiment...")
+        optimizer_results = run_optimizer_experiment(
+            qubit_hamiltonian,
+            optimizer_names=OPTIMIZERS_TO_COMPARE,
+            reps=DEFAULT_REPS,
+            ansatz_mode=DEFAULT_ANSATZ_MODE,
+            problem=problem,
+            mapper=mapper,
+            show_progress=USE_TQDM,
+        )
+
+        optimizer_summary = {
+            optimizer_name: {
+                "energy": data["energy"],
+                "absolute_error": abs(data["energy"] - exact["energy"]),
+                "ansatz_num_parameters": data["ansatz_num_parameters"],
+                "ansatz_depth": data["ansatz_depth"],
+            }
+            for optimizer_name, data in optimizer_results.items()
+        }
+        write_json(results_dir / "optimizer_experiment_summary.json", optimizer_summary)
+
+        if SAVE_OPTIMIZER_OVERLAY_PLOT:
+            plot_optimizer_overlay(
+                histories=optimizer_results,
+                exact_energy=exact["energy"],
+                output_path=results_dir / "lih_optimizer_overlay.png",
+                title="VQE convergence with different optimizers",
+            )
+
+        print("\nOptimizer experiment summary:")
+        for optimizer_name, row in optimizer_summary.items():
+            print(f"{optimizer_name}: {row}")
+
+    if RUN_REPEATED_OPTIMIZER_EXPERIMENT:
+        print("[6/9] Running repeated optimizer comparison...")
+        repeated_optimizer_results = {}
+
+        for optimizer_name in OPTIMIZERS_TO_COMPARE:
+            print(f"  optimizer={optimizer_name}")
+            repeated_optimizer_results[optimizer_name] = run_repeated_trials(
+                qubit_hamiltonian=qubit_hamiltonian,
+                num_trials=NUM_TRIALS,
+                reps=DEFAULT_REPS,
+                optimizer_name=optimizer_name,
+                ansatz_mode=DEFAULT_ANSATZ_MODE,
+                problem=problem,
+                mapper=mapper,
+                show_progress=USE_TQDM,
+                base_seed=RANDOM_SEED,
+            )
+
+        repeated_optimizer_summary = {
+            optimizer_name: summarize_repeated_trials(trials, exact["energy"])
+            for optimizer_name, trials in repeated_optimizer_results.items()
+        }
+
+        if SAVE_REPEATED_TRIALS_SUMMARY:
+            write_json(results_dir / "repeated_optimizer_summary.json", repeated_optimizer_summary)
+
+        if SAVE_REPEATED_TRIALS_PLOT:
+            plot_repeated_trials_comparison(
+                grouped_trial_results=repeated_optimizer_results,
+                exact_energy=exact["energy"],
+                output_path=results_dir / "repeated_optimizer_comparison.png",
+                title=f"Repeated optimizer comparison ({DEFAULT_ANSATZ_MODE})",
+            )
+
+        print("\nRepeated optimizer summary:")
+        for optimizer_name, row in repeated_optimizer_summary.items():
+            print(f"{optimizer_name}: {row}")
+
+    if RUN_BOND_SCAN:
+        print("[7/9] Running bond-length scan...")
+        bond_scan_rows = scan_bond_lengths(
+            BOND_LENGTHS,
+            reps=DEFAULT_REPS,
+            optimizer_name=OPTIMIZER_NAME,
+            ansatz_mode=DEFAULT_ANSATZ_MODE,
+            basis=BASIS,
+            simplify_hamiltonian=True,
+            show_progress=USE_TQDM,
+        )
+        write_csv(results_dir / "bond_scan.csv", bond_scan_rows)
+
+        if SAVE_BOND_SCAN_PLOT:
+            plot_bond_scan(
+                rows=bond_scan_rows,
+                output_path=results_dir / "lih_bond_scan.png",
+                title="LiH energy vs bond length",
+            )
+
+        if SAVE_BOND_ERROR_PLOT:
+            plot_bond_error(
+                rows=bond_scan_rows,
+                output_path=results_dir / "lih_bond_error.png",
+                title="VQE absolute error vs bond length",
+            )
+
+    if RUN_BASIS_COMPARISON:
+        print("[8/9] Running basis comparison...")
+        basis_rows = []
+
+        basis_iterator = tqdm(BASIS_SETS_TO_COMPARE, desc="Basis comparison", leave=False) if USE_TQDM else BASIS_SETS_TO_COMPARE
+
+        for basis in basis_iterator:
+            if USE_TQDM:
+                basis_iterator.set_postfix({"basis": basis})
+            else:
+                print(f"  basis={basis}")
+
+            print(f"\n--- basis={basis}: building problem bundle ---")
+            basis_bundle = get_problem_bundle(DEFAULT_BOND_LENGTH, basis=basis, simplify=True)
+
+            print(f"--- basis={basis}: bundle built ---")
+            basis_problem = basis_bundle["problem"]
+            basis_mapper = basis_bundle["mapper"]
+            basis_qubit_hamiltonian = basis_bundle["qubit_hamiltonian"]
+
+            print(
+                f"--- basis={basis}: "
+                f"spin_orbitals={basis_problem.num_spin_orbitals} | "
+                f"qubits={basis_qubit_hamiltonian.num_qubits} | "
+                f"pauli_terms={len(basis_qubit_hamiltonian)} ---"
+            )
+
+            basis_summary = summarize_problem(
+                basis_problem,
+                basis_qubit_hamiltonian,
+                DEFAULT_BOND_LENGTH,
+                basis,
+            )
+
+            exact_energy = None
+            vqe_energy = None
+            absolute_error = None
+            ran_exact = False
+            ran_vqe = False
+            ansatz_num_parameters = None
+            ansatz_depth = None
+
+            if basis_qubit_hamiltonian.num_qubits <= MAX_EXACT_QUBITS:
+                print(f"--- basis={basis}: running exact solver ---")
+                basis_exact = run_exact(basis_qubit_hamiltonian)
+                exact_energy = basis_exact["energy"]
+                ran_exact = True
+
+                print(f"--- basis={basis}: exact done, running VQE ---")
+                basis_vqe = run_vqe(
+                    basis_qubit_hamiltonian,
+                    reps=DEFAULT_REPS,
+                    optimizer_name=OPTIMIZER_NAME,
+                    ansatz_mode=DEFAULT_ANSATZ_MODE,
+                    problem=basis_problem,
+                    mapper=basis_mapper,
+                    show_progress=USE_TQDM,
+                    progress_label=f"VQE basis={basis}",
+                    random_seed=RANDOM_SEED,
+                )
+                vqe_energy = basis_vqe["energy"]
+                absolute_error = abs(vqe_energy - exact_energy)
+                ran_vqe = True
+                ansatz_num_parameters = basis_vqe["ansatz_num_parameters"]
+                ansatz_depth = basis_vqe["ansatz_depth"]
+
+                print(f"--- basis={basis}: VQE done ---")
+            else:
+                print(
+                    f"--- basis={basis}: skipping exact/VQE because "
+                    f"num_qubits={basis_qubit_hamiltonian.num_qubits} exceeds MAX_EXACT_QUBITS={MAX_EXACT_QUBITS} ---"
+                )
+
+            basis_rows.append(
+                {
+                    **basis_summary,
+                    "ansatz_mode": DEFAULT_ANSATZ_MODE,
+                    "optimizer_name": OPTIMIZER_NAME,
+                    "ran_exact": ran_exact,
+                    "ran_vqe": ran_vqe,
+                    "exact_energy": exact_energy,
+                    "vqe_energy": vqe_energy,
+                    "absolute_error": absolute_error,
+                    "ansatz_num_parameters": ansatz_num_parameters,
+                    "ansatz_depth": ansatz_depth,
+                }
+            )
+
+        write_csv(results_dir / "basis_comparison.csv", basis_rows)
+
+        if SAVE_BASIS_ERROR_PLOT:
+            plot_basis_error(
+                rows=basis_rows,
+                output_path=results_dir / "lih_basis_error.png",
+                title="Absolute error vs basis set",
+            )
+
+        print("\nBasis comparison:")
+        for row in basis_rows:
+            print(row)
+
+    if RUN_ANSATZ_MODE_COMPARISON:
+        print("[9/9] Running ansatz-mode comparison...")
+        ansatz_mode_results = run_ansatz_mode_experiment(
+            qubit_hamiltonian=qubit_hamiltonian,
+            ansatz_modes=ANSATZ_MODES_TO_COMPARE,
+            reps=DEFAULT_REPS,
+            optimizer_name=OPTIMIZER_NAME,
+            problem=problem,
+            mapper=mapper,
+            show_progress=USE_TQDM,
+        )
+
+        ansatz_mode_rows = []
+        for ansatz_mode, data in ansatz_mode_results.items():
+            ansatz_mode_rows.append(
+                {
+                    **summary,
+                    "ansatz_mode": ansatz_mode,
+                    "optimizer_name": OPTIMIZER_NAME,
+                    "exact_energy": exact["energy"],
+                    "vqe_energy": data["energy"],
+                    "absolute_error": abs(data["energy"] - exact["energy"]),
+                    "ansatz_num_parameters": data["ansatz_num_parameters"],
+                    "ansatz_depth": data["ansatz_depth"],
+                }
+            )
+
+        write_csv(results_dir / "ansatz_mode_comparison.csv", ansatz_mode_rows)
+
+        if SAVE_ANSATZ_MODE_ERROR_PLOT:
+            plot_ansatz_mode_error(
+                rows=ansatz_mode_rows,
+                output_path=results_dir / "lih_ansatz_mode_error.png",
+                title="Absolute error vs ansatz mode",
+            )
+
+        plot_ansatz_mode_final_energy(
+            rows=ansatz_mode_rows,
+            output_path=results_dir / "lih_ansatz_mode_final_energy.png",
+            title="Final energy vs ansatz mode",
+        )
+
+        plot_ansatz_mode_overlay(
+            histories=ansatz_mode_results,
             exact_energy=exact["energy"],
-            output_path=results_dir / "lih_optimizer_overlay.png",
+            output_path=results_dir / "lih_ansatz_mode_overlay.png",
+            title="VQE convergence with different ansatz modes",
         )
 
-    bond_scan_rows = scan_bond_lengths(
-        BOND_LENGTHS,
-        reps=DEFAULT_REPS,
-        optimizer_name=OPTIMIZER_NAME,
-        simplify_hamiltonian=True,
-        show_progress=USE_TQDM,
-    )
-    write_csv(results_dir / "bond_scan.csv", bond_scan_rows)
+        print("\nAnsatz mode comparison:")
+        for row in ansatz_mode_rows:
+            print(row)
+   
+    if RUN_REPEATED_ANSATZ_MODE_EXPERIMENT:
+        print("[extra] Running repeated ansatz-mode comparison...")
+        repeated_ansatz_results = {}
 
-    if SAVE_BOND_SCAN_PLOT:
-        plot_bond_scan(
-            rows=bond_scan_rows,
-            output_path=results_dir / "lih_bond_scan.png",
-        )
+        for ansatz_mode in ANSATZ_MODES_TO_COMPARE:
+            print(f"  ansatz_mode={ansatz_mode}")
+            repeated_ansatz_results[ansatz_mode] = run_repeated_trials(
+                qubit_hamiltonian=qubit_hamiltonian,
+                num_trials=NUM_TRIALS,
+                reps=DEFAULT_REPS,
+                optimizer_name=OPTIMIZER_NAME,
+                ansatz_mode=ansatz_mode,
+                problem=problem,
+                mapper=mapper,
+                show_progress=USE_TQDM,
+                base_seed=RANDOM_SEED,
+            )
 
-    if SAVE_BOND_ERROR_PLOT:
-        plot_bond_error(
-            rows=bond_scan_rows,
-            output_path=results_dir / "lih_bond_error.png",
-        )
+        repeated_ansatz_summary = {
+            ansatz_mode: summarize_repeated_trials(trials, exact["energy"])
+            for ansatz_mode, trials in repeated_ansatz_results.items()
+        }
 
-    print("Single-run summary:")
-    for key, value in single_run_summary.items():
-        print(f"{key}: {value}")
+        if SAVE_REPEATED_TRIALS_SUMMARY:
+            write_json(results_dir / "repeated_ansatz_mode_summary.json", repeated_ansatz_summary)
 
-    print("\nReps experiment summary:")
-    for reps, row in reps_summary.items():
-        print(f"reps={reps}: {row}")
+        if SAVE_REPEATED_TRIALS_PLOT:
+            plot_repeated_trials_comparison(
+                grouped_trial_results=repeated_ansatz_results,
+                exact_energy=exact["energy"],
+                output_path=results_dir / "repeated_ansatz_mode_comparison.png",
+                title=f"Repeated ansatz-mode comparison ({OPTIMIZER_NAME})",
+            )
 
-    print("\nOptimizer experiment summary:")
-    for optimizer_name, row in optimizer_summary.items():
-        print(f"{optimizer_name}: {row}")
+        print("\nRepeated ansatz-mode summary:")
+        for ansatz_mode, row in repeated_ansatz_summary.items():
+            print(f"{ansatz_mode}: {row}")
 
     print("\nSaved outputs to:", results_dir)
 

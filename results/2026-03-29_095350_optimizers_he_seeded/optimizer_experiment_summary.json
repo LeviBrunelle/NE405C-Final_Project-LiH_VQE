@@ -1,0 +1,14 @@
+{
+  "COBYLA": {
+    "energy": -8.39704696629483,
+    "absolute_error": 0.47748468306368963,
+    "ansatz_num_parameters": 48,
+    "ansatz_depth": 17
+  },
+  "SPSA": {
+    "energy": -6.658739705517605,
+    "absolute_error": 2.215791943840915,
+    "ansatz_num_parameters": 48,
+    "ansatz_depth": 17
+  }
+}

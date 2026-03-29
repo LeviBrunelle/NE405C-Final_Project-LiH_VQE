@@ -7,7 +7,13 @@ from .build_hamiltonian import (
     summarize_problem,
 )
 from .run_exact import run_exact
-from .run_vqe import build_ansatz, run_optimizer_experiment, run_reps_experiment, run_vqe
+from .run_vqe import (
+    build_ansatz,
+    run_ansatz_mode_experiment,
+    run_optimizer_experiment,
+    run_reps_experiment,
+    run_vqe,
+)
 from .scan_bond_lengths import scan_bond_lengths
 
 __all__ = [
@@ -19,6 +25,7 @@ __all__ = [
     "summarize_problem",
     "run_exact",
     "build_ansatz",
+    "run_ansatz_mode_experiment",
     "run_optimizer_experiment",
     "run_reps_experiment",
     "run_vqe",

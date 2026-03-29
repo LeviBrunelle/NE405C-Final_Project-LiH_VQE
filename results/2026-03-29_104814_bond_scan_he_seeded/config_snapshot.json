@@ -1,0 +1,67 @@
+{
+  "ANSATZ_FOLD": 50,
+  "ANSATZ_MODES_TO_COMPARE": [
+    "hardware_efficient",
+    "uccsd_hf"
+  ],
+  "BASIS": "sto3g",
+  "BASIS_SETS_TO_COMPARE": [
+    "sto3g",
+    "3-21g"
+  ],
+  "BOND_LENGTHS": [
+    1.0,
+    1.5,
+    2.0,
+    2.5,
+    3.0
+  ],
+  "CHARGE": 0,
+  "COBYLA_MAXITER": 400,
+  "DEFAULT_ANSATZ_MODE": "hardware_efficient",
+  "DEFAULT_BOND_LENGTH": 1.6,
+  "DEFAULT_REPS": 2,
+  "ENTANGLEMENT_PATTERN": "linear",
+  "FIG_DPI": 300,
+  "MAPPER_NAME": "jordan_wigner",
+  "MAX_EXACT_QUBITS": 16,
+  "MOLECULE_NAME": "LiH",
+  "NUM_TRIALS": 5,
+  "OPTIMIZERS_TO_COMPARE": [
+    "COBYLA",
+    "SPSA"
+  ],
+  "OPTIMIZER_NAME": "COBYLA",
+  "PREVIEW_TERM_COUNT": 15,
+  "RANDOM_SEED": 123,
+  "REPS_EXPERIMENT": [
+    1,
+    2,
+    3
+  ],
+  "RUN_ANSATZ_MODE_COMPARISON": false,
+  "RUN_BASIS_COMPARISON": false,
+  "RUN_BOND_SCAN": true,
+  "RUN_LABEL": "bond_scan_he_seeded",
+  "RUN_OPTIMIZER_EXPERIMENT": false,
+  "RUN_REPEATED_ANSATZ_MODE_EXPERIMENT": false,
+  "RUN_REPEATED_OPTIMIZER_EXPERIMENT": false,
+  "RUN_REPEATED_SINGLE_POINT": false,
+  "RUN_REPS_EXPERIMENT": false,
+  "RUN_SINGLE_POINT": false,
+  "SAVE_ANSATZ_FIGURE": true,
+  "SAVE_ANSATZ_MODE_ERROR_PLOT": true,
+  "SAVE_BASIS_ERROR_PLOT": true,
+  "SAVE_BOND_ERROR_PLOT": true,
+  "SAVE_BOND_SCAN_PLOT": true,
+  "SAVE_CONVERGENCE_PLOT": true,
+  "SAVE_HAMILTONIAN_PREVIEW": true,
+  "SAVE_OPTIMIZER_OVERLAY_PLOT": true,
+  "SAVE_REPEATED_TRIALS_PLOT": true,
+  "SAVE_REPEATED_TRIALS_SUMMARY": true,
+  "SAVE_REPS_ERROR_PLOT": true,
+  "SAVE_REPS_OVERLAY_PLOT": true,
+  "SPIN": 0,
+  "SPSA_MAXITER": 200.0,
+  "USE_TQDM": true
+}
