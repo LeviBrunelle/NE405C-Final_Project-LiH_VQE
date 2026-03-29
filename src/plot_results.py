@@ -359,4 +359,75 @@ def plot_ansatz_mode_error(
     plt.close()
 
 
+def plot_optimizer_reps_overlay(
+    histories: dict[str, dict[int, dict]],
+    exact_energy: float,
+    output_path: str | Path | None = None,
+    title: str = "VQE convergence by optimizer and ansatz depth",
+    use_running_best: bool = True,
+) -> None:
+    """
+    histories format:
+    {
+        "COBYLA": {
+            1: {"counts": [...], "energies": [...]},
+            2: {...},
+            3: {...},
+        },
+        "SPSA": {
+            1: {...},
+            2: {...},
+            3: {...},
+        },
+    }
+    """
 
+    # blue gradient for COBYLA, red gradient for SPSA
+    color_map = {
+        "COBYLA": ["#9ecae1", "#3182bd", "#08519c"],
+        "SPSA": ["#fcae91", "#fb6a4a", "#cb181d"],
+    }
+
+    plt.figure(figsize=(9, 6))
+
+    for optimizer_name, reps_dict in histories.items():
+        reps_sorted = sorted(reps_dict.keys())
+        palette = color_map.get(optimizer_name, None)
+
+        for idx, reps in enumerate(reps_sorted):
+            data = reps_dict[reps]
+            counts = np.array(data["counts"], dtype=float)
+            energies = np.array(data["energies"], dtype=float)
+
+            if use_running_best:
+                y = np.minimum.accumulate(energies)
+            else:
+                y = energies
+
+            if palette is not None and idx < len(palette):
+                color = palette[idx]
+            else:
+                color = None
+
+            plt.plot(
+                counts,
+                y,
+                marker="o",
+                markersize=2.5,
+                linewidth=1.8,
+                color=color,
+                label=f"{optimizer_name} reps={reps}",
+            )
+
+    plt.axhline(exact_energy, linestyle="--", linewidth=2, label="Exact energy")
+
+    plt.xlabel("Evaluation count")
+    plt.ylabel("Energy (Hartree)")
+    plt.title(title)
+    plt.legend(ncol=2)
+    plt.tight_layout()
+
+    if output_path is not None:
+        plt.savefig(output_path, dpi=300, bbox_inches="tight")
+
+    plt.close()

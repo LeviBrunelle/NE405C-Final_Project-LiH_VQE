@@ -1,0 +1,42 @@
+{
+  "COBYLA": {
+    "1": {
+      "energy": -8.525369514016955,
+      "absolute_error": 0.3491621353415386,
+      "ansatz_num_parameters": 24,
+      "ansatz_depth": 13
+    },
+    "2": {
+      "energy": -8.636716089096439,
+      "absolute_error": 0.23781556026205486,
+      "ansatz_num_parameters": 48,
+      "ansatz_depth": 17
+    },
+    "3": {
+      "energy": -8.6761909471208,
+      "absolute_error": 0.19834070223769373,
+      "ansatz_num_parameters": 72,
+      "ansatz_depth": 21
+    }
+  },
+  "SPSA": {
+    "1": {
+      "energy": -4.298482803001966,
+      "absolute_error": 4.576048846356527,
+      "ansatz_num_parameters": 24,
+      "ansatz_depth": 13
+    },
+    "2": {
+      "energy": -8.540801876680517,
+      "absolute_error": 0.33372977267797665,
+      "ansatz_num_parameters": 48,
+      "ansatz_depth": 17
+    },
+    "3": {
+      "energy": -8.481193714766077,
+      "absolute_error": 0.3933379345924166,
+      "ansatz_num_parameters": 72,
+      "ansatz_depth": 21
+    }
+  }
+}

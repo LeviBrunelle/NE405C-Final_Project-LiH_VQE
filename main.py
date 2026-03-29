@@ -37,6 +37,7 @@ from src.config import (
     RUN_BOND_SCAN,
     RUN_LABEL,
     RUN_OPTIMIZER_EXPERIMENT,
+    RUN_OPTIMIZER_REPS_GRID,
     RUN_REPEATED_ANSATZ_MODE_EXPERIMENT,
     RUN_REPEATED_OPTIMIZER_EXPERIMENT,
     RUN_REPEATED_SINGLE_POINT,
@@ -59,23 +60,25 @@ from src.config import (
 )
 from src.plot_results import (
     plot_ansatz_mode_error,
+    plot_ansatz_mode_final_energy,
+    plot_ansatz_mode_overlay,
     plot_basis_error,
     plot_bond_error,
     plot_bond_scan,
     plot_convergence,
     plot_optimizer_overlay,
+    plot_optimizer_reps_overlay,
     plot_repeated_trials_comparison,
     plot_repeated_trials_mean_std,
     plot_reps_error,
     plot_reps_overlay,
-    plot_ansatz_mode_final_energy,
-    plot_ansatz_mode_overlay,
 )
 from src.run_exact import run_exact
 from src.run_vqe import (
     build_ansatz,
     run_ansatz_mode_experiment,
     run_optimizer_experiment,
+    run_optimizer_reps_grid,
     run_repeated_trials,
     run_reps_experiment,
     run_vqe,
@@ -585,6 +588,46 @@ def main() -> None:
         print("\nRepeated ansatz-mode summary:")
         for ansatz_mode, row in repeated_ansatz_summary.items():
             print(f"{ansatz_mode}: {row}")
+
+    if RUN_OPTIMIZER_REPS_GRID:
+        print("[extra] Running optimizer-reps grid...")
+
+        optimizer_reps_results = run_optimizer_reps_grid(
+            qubit_hamiltonian=qubit_hamiltonian,
+            optimizer_names=OPTIMIZERS_TO_COMPARE,
+            reps_values=REPS_EXPERIMENT,
+            ansatz_mode=DEFAULT_ANSATZ_MODE,
+            problem=problem,
+            mapper=mapper,
+            show_progress=USE_TQDM,
+        )
+
+        optimizer_reps_summary = {}
+        for optimizer_name, reps_dict in optimizer_reps_results.items():
+            optimizer_reps_summary[optimizer_name] = {}
+            for reps, data in reps_dict.items():
+                optimizer_reps_summary[optimizer_name][reps] = {
+                    "energy": data["energy"],
+                    "absolute_error": abs(data["energy"] - exact["energy"]),
+                    "ansatz_num_parameters": data["ansatz_num_parameters"],
+                    "ansatz_depth": data["ansatz_depth"],
+                }
+
+        write_json(results_dir / "optimizer_reps_grid_summary.json", optimizer_reps_summary)
+
+        plot_optimizer_reps_overlay(
+            histories=optimizer_reps_results,
+            exact_energy=exact["energy"],
+            output_path=results_dir / "lih_optimizer_reps_overlay.png",
+            title=f"Optimizer vs ansatz depth ({DEFAULT_ANSATZ_MODE})",
+            use_running_best=True,
+        )
+
+        print("\nOptimizer × reps summary:")
+        for optimizer_name, reps_dict in optimizer_reps_summary.items():
+            print(optimizer_name)
+            for reps, row in reps_dict.items():
+                print(f"  reps={reps}: {row}")
 
     print("\nSaved outputs to:", results_dir)
 

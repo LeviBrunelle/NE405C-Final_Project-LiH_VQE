@@ -9,7 +9,7 @@ from qiskit import QuantumCircuit
 from qiskit.circuit import ParameterVector
 from qiskit.primitives import StatevectorEstimator
 from qiskit_algorithms import VQE
-from qiskit_algorithms.optimizers import COBYLA, SPSA
+from qiskit_algorithms.optimizers import COBYLA, SPSA, GradientDescent
 from qiskit_algorithms.utils import algorithm_globals
 
 from qiskit_nature.second_q.circuit.library import HartreeFock, UCCSD
@@ -19,6 +19,8 @@ from .config import (
     DEFAULT_ANSATZ_MODE,
     DEFAULT_REPS,
     ENTANGLEMENT_PATTERN,
+    GD_LEARNING_RATE,
+    GD_MAXITER,
     OPTIMIZER_NAME,
     RANDOM_SEED,
     SPSA_MAXITER,
@@ -104,6 +106,11 @@ def build_optimizer(optimizer_name: str | None = None):
         return COBYLA(maxiter=COBYLA_MAXITER)
     if name == "SPSA":
         return SPSA(maxiter=SPSA_MAXITER)
+    if name == "GRADIENT_DESCENT":
+        return GradientDescent(
+            maxiter=GD_MAXITER,
+            learning_rate=GD_LEARNING_RATE,
+    )
 
     raise ValueError(f"Unsupported optimizer: {name}")
 
@@ -113,7 +120,9 @@ def get_optimizer_maxiter(optimizer_name: str | None = None) -> int:
     if name == "COBYLA":
         return COBYLA_MAXITER
     if name == "SPSA":
-        return SPSA_MAXITER
+        return SPSA_MAXITER*2
+    if name == "GRADIENT_DESCENT":
+        return GD_MAXITER*49
     raise ValueError(f"Unsupported optimizer: {name}")
 
 def run_repeated_trials(
@@ -297,3 +306,34 @@ def run_ansatz_mode_experiment(
             show_progress=show_progress,
         )
     return results
+
+
+
+def run_optimizer_reps_grid(
+    qubit_hamiltonian: Any,
+    optimizer_names: list[str],
+    reps_values: list[int],
+    ansatz_mode: str = DEFAULT_ANSATZ_MODE,
+    problem: Any | None = None,
+    mapper: Any | None = None,
+    show_progress: bool = False,
+) -> dict[str, dict[int, dict[str, Any]]]:
+    results: dict[str, dict[int, dict[str, Any]]] = {}
+
+    for optimizer_name in optimizer_names:
+        results[optimizer_name] = {}
+        for reps in reps_values:
+            results[optimizer_name][reps] = run_vqe(
+                qubit_hamiltonian=qubit_hamiltonian,
+                reps=reps,
+                optimizer_name=optimizer_name,
+                ansatz_mode=ansatz_mode,
+                problem=problem,
+                mapper=mapper,
+                show_progress=show_progress,
+                progress_label=f"{optimizer_name} reps={reps}",
+            )
+
+    return results
+
+
