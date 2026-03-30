@@ -208,11 +208,37 @@ def main() -> None:
                 problem=problem,
                 mapper=mapper,
             )
+
             try:
-                fig = ansatz.decompose().draw(output="mpl", fold=ANSATZ_FOLD)
-                fig.savefig(results_dir / f"{molecule_name.lower()}_ansatz_circuit.png", dpi=FIG_DPI, bbox_inches="tight")
+                if DEFAULT_ANSATZ_MODE == "uccsd_hf":
+                    circuit_to_draw = ansatz
+                    fig = circuit_to_draw.draw(
+                        output="mpl",
+                        fold=20,
+                        idle_wires=False,
+                    )
+                else:
+                    circuit_to_draw = ansatz.decompose()
+                    fig = circuit_to_draw.draw(
+                        output="mpl",
+                        fold=ANSATZ_FOLD,
+                        idle_wires=False,
+                    )
+
+                fig.savefig(
+                    results_dir / f"{molecule_name}_{DEFAULT_ANSATZ_MODE}_ansatz_circuit.png",
+                    dpi=FIG_DPI,
+                    bbox_inches="tight",
+                )
             except Exception as exc:
                 print(f"Warning: could not save ansatz figure: {exc}")
+
+            try:
+                text_diagram = circuit_to_draw.draw(output="text", fold=120)
+                with open(results_dir / f"{molecule_name}_{DEFAULT_ANSATZ_MODE}_ansatz_circuit.txt", "w", encoding="utf-8") as f:
+                    f.write(str(text_diagram))
+            except Exception as exc:
+                print(f"Warning: could not save text ansatz diagram: {exc}")
 
         print("Single-run summary:")
         for key, value in single_run_summary.items():
