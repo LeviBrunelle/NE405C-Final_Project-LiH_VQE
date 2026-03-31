@@ -1,18 +1,42 @@
 # LiH VQE Project
 
-This repo implements a Qiskit-based variational quantum eigensolver workflow for LiH. Created for a final project in ECE405C - Intro Quantum Algorithms.
+A Qiskit-based variational quantum eigensolver (VQE) workflow for small molecular systems, built for the ECE405C final project.
 
-## Structure
+This project studies how different design choices affect VQE performance, including:
 
-- `src/config.py` contains all tunable project parameters.
-- `src/build_hamiltonian.py` builds the LiH electronic-structure problem and maps it to qubits.
-- `src/run_exact.py` computes the exact minimum eigenvalue of the qubit Hamiltonian.
-- `src/run_vqe.py` builds the ansatz and runs VQE.
-- `src/scan_bond_lengths.py` evaluates exact and VQE energies across multiple bond lengths.
-- `src/plot_results.py` generates convergence and energy plots.
-- `main.py` runs the full pipeline and writes outputs to `results/`.
+- ansatz type
+- circuit depth
+- optimizer choice
+- bond length
+- basis set
+- noisy vs noiseless simulation settings
 
-## Setup
+The main reference problem is LiH, with optional extensions to other small molecules such as BeH2.
 
-```bash
-pip install -r requirements.txt
+---
+
+## Project Goal
+
+The goal of this repo is to compare exact diagonalization against VQE estimates for molecular Hamiltonians mapped to qubits.
+
+The project focuses on a few core questions:
+
+- How well does a hardware-efficient ansatz approximate the ground-state energy?
+- How does it compare to a chemistry-motivated ansatz such as UCCSD with a Hartree–Fock reference?
+- How do optimizer choice and circuit depth affect convergence?
+- How does performance change across bond lengths?
+- What happens when shot noise and simple hardware-inspired noise are introduced?
+
+---
+
+## Method Overview
+
+The workflow is:
+
+1. Build an electronic structure problem with `PySCFDriver`
+2. Convert the fermionic Hamiltonian to a qubit Hamiltonian with the Jordan–Wigner mapping
+3. Compute the exact minimum eigenvalue as a classical baseline
+4. Build a parameterized ansatz circuit
+5. Run VQE with a selected optimizer and backend
+6. Save numerical results and plots to `results/`
+
