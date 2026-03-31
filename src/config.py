@@ -3,8 +3,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 RESULTS_DIR = PROJECT_ROOT / "results"
 
-RUN_NAME = "refactor_noise_test"
-EXPERIMENT = "noise"  # single, reps, optimizer, ansatz, repeat_single, 
+RUN_NAME = "slide-replacement"
+EXPERIMENT = "optimizer"  # single, reps, optimizer, ansatz, repeat_single, 
                        # repeat_optimizer, repeat_ansatz, bond_scan, basis,
                        # optimizer_reps, noise
 
@@ -26,8 +26,8 @@ REPS_VALUES = [1, 2, 3]
 
 OPTIMIZER = "COBYLA"  # COBYLA, SPSA
 OPTIMIZERS = ["COBYLA", "SPSA"]
-COBYLA_MAXITER = 200
-SPSA_MAXITER = 100
+COBYLA_MAXITER = 4000
+SPSA_MAXITER = COBYLA_MAXITER // 2
 GD_MAXITER = 12
 GD_LEARNING_RATE = 0.05
 

@@ -115,7 +115,21 @@ def main() -> None:
         return
 
     if C.EXPERIMENT == "optimizer":
-        results = sweep(C.OPTIMIZERS, lambda name: run_vqe(qubit_h, optimizer_name=name, seed=C.RANDOM_SEED, **kwargs, label=name))
+        results = sweep(
+            C.OPTIMIZERS,
+            lambda name: run_vqe(
+                qubit_h,
+                optimizer_name=name,
+                seed=C.RANDOM_SEED,
+                problem=problem,
+                mapper=mapper,
+                ansatz_kind=C.ANSATZ_KIND,
+                reps=C.REPS,
+                backend_mode=C.BACKEND_MODE,
+                show_progress=C.USE_TQDM,
+                label=name,
+            ),
+        )
         rows = {name: {"energy": r["energy"], "absolute_error": abs(r["energy"] - exact["energy"]), "ansatz_num_parameters": r["ansatz_num_parameters"], "ansatz_depth": r["ansatz_depth"]} for name, r in results.items()}
         write_json(run_dir / "optimizer_summary.json", rows)
         plot_overlay(results, exact["energy"], run_dir / "optimizer_overlay.png", title=f"{molecule_name} optimizer comparison")
@@ -139,7 +153,25 @@ def main() -> None:
         return
 
     if C.EXPERIMENT == "repeat_optimizer":
-        groups = {name: repeat(C.NUM_TRIALS, lambda seed, name=name: run_vqe(qubit_h, optimizer_name=name, seed=seed, **kwargs, label=name), base_seed=C.RANDOM_SEED) for name in C.OPTIMIZERS}
+        groups = {
+            name: repeat(
+                C.NUM_TRIALS,
+                lambda seed, name=name: run_vqe(
+                    qubit_h,
+                    optimizer_name=name,
+                    seed=seed,
+                    problem=problem,
+                    mapper=mapper,
+                    ansatz_kind=C.ANSATZ_KIND,
+                    reps=C.REPS,
+                    backend_mode=C.BACKEND_MODE,
+                    show_progress=C.USE_TQDM,
+                    label=name,
+                ),
+                base_seed=C.RANDOM_SEED,
+            )
+            for name in C.OPTIMIZERS
+        }
         write_json(run_dir / "repeat_optimizer_summary.json", {name: summarize_trials(trials, exact["energy"]) for name, trials in groups.items()})
         plot_mean_std(groups, exact["energy"], run_dir / "repeat_optimizer.png", title=f"Repeated optimizer comparison ({C.ANSATZ_KIND})")
         return
