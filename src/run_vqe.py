@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import numpy as np
@@ -8,435 +9,200 @@ from tqdm.auto import tqdm
 from qiskit import QuantumCircuit
 from qiskit.circuit import ParameterVector
 from qiskit.primitives import StatevectorEstimator
+from qiskit_aer.noise import NoiseModel, ReadoutError, depolarizing_error
+from qiskit_aer.primitives import EstimatorV2 as AerEstimator
 from qiskit_algorithms import VQE
-from qiskit_algorithms.optimizers import COBYLA, SPSA, GradientDescent
+from qiskit_algorithms.optimizers import COBYLA, GradientDescent, SPSA
 from qiskit_algorithms.utils import algorithm_globals
-
 from qiskit_nature.second_q.circuit.library import HartreeFock, UCCSD
 
 from .config import (
     AER_DEFAULT_PRECISION,
-    AER_METHOD,
-    BACKEND_MODES_TO_COMPARE,
+    ANSATZ_KIND,
+    BACKEND_MODE,
     COBYLA_MAXITER,
-    DEFAULT_ANSATZ_MODE,
-    DEFAULT_REPS,
     ENTANGLEMENT_PATTERN,
     GD_LEARNING_RATE,
     GD_MAXITER,
-    NOISE_1Q_DEPOLARIZING,
-    NOISE_2Q_DEPOLARIZING,
-    NOISE_READOUT_P00,
-    NOISE_READOUT_P11,
-    OPTIMIZER_NAME,
+    NOISE_1Q,
+    NOISE_2Q,
+    OPTIMIZER,
     RANDOM_SEED,
+    READOUT_ERROR,
+    REPS,
     SPSA_MAXITER,
-    VQE_BACKEND_MODE,
+    USE_TQDM,
 )
 
 
-def build_hardware_efficient_ansatz(num_qubits: int, reps: int = DEFAULT_REPS) -> QuantumCircuit:
-    if ENTANGLEMENT_PATTERN not in {"linear", "circular"}:
-        raise ValueError(
-            f"Unsupported entanglement pattern: {ENTANGLEMENT_PATTERN}. "
-            "Use 'linear' or 'circular'."
-        )
-
+def build_hardware_efficient_ansatz(num_qubits: int, reps: int) -> QuantumCircuit:
     qc = QuantumCircuit(num_qubits)
-    num_rotation_params = reps * num_qubits * 2
-    theta = ParameterVector("theta", num_rotation_params)
-
-    param_index = 0
-
+    theta = ParameterVector("theta", reps * num_qubits * 2)
+    k = 0
     for _ in range(reps):
         for q in range(num_qubits):
-            qc.ry(theta[param_index], q)
-            param_index += 1
-
+            qc.ry(theta[k], q)
+            k += 1
         for q in range(num_qubits):
-            qc.rz(theta[param_index], q)
-            param_index += 1
-
+            qc.rz(theta[k], q)
+            k += 1
         for q in range(num_qubits - 1):
             qc.cx(q, q + 1)
-
         if ENTANGLEMENT_PATTERN == "circular" and num_qubits > 2:
             qc.cx(num_qubits - 1, 0)
-
     return qc
-
-
-def build_uccsd_hf_ansatz(problem: Any, mapper: Any):
-    hf_state = HartreeFock(
-        num_spatial_orbitals=problem.num_spatial_orbitals,
-        num_particles=problem.num_particles,
-        qubit_mapper=mapper,
-    )
-
-    ansatz = UCCSD(
-        num_spatial_orbitals=problem.num_spatial_orbitals,
-        num_particles=problem.num_particles,
-        qubit_mapper=mapper,
-        initial_state=hf_state,
-    )
-
-    initial_point = np.zeros(ansatz.num_parameters, dtype=float)
-    return ansatz, initial_point
 
 
 def build_ansatz(
     num_qubits: int,
-    reps: int = DEFAULT_REPS,
-    ansatz_mode: str = DEFAULT_ANSATZ_MODE,
+    ansatz_kind: str = ANSATZ_KIND,
+    reps: int = REPS,
     problem: Any | None = None,
     mapper: Any | None = None,
 ):
-    if ansatz_mode == "hardware_efficient":
-        ansatz = build_hardware_efficient_ansatz(num_qubits=num_qubits, reps=reps)
-        initial_point = np.zeros(ansatz.num_parameters, dtype=float)
-        return ansatz, initial_point
-
-    if ansatz_mode == "uccsd_hf":
+    if ansatz_kind == "hardware_efficient":
+        ansatz = build_hardware_efficient_ansatz(num_qubits, reps)
+        return ansatz, np.zeros(ansatz.num_parameters, dtype=float)
+    if ansatz_kind == "uccsd_hf":
         if problem is None or mapper is None:
-            raise ValueError("UCCSD + HartreeFock ansatz requires both problem and mapper.")
-        return build_uccsd_hf_ansatz(problem=problem, mapper=mapper)
+            raise ValueError("UCCSD+HF requires problem and mapper")
+        hf = HartreeFock(
+            num_spatial_orbitals=problem.num_spatial_orbitals,
+            num_particles=problem.num_particles,
+            qubit_mapper=mapper,
+        )
+        ansatz = UCCSD(
+            num_spatial_orbitals=problem.num_spatial_orbitals,
+            num_particles=problem.num_particles,
+            qubit_mapper=mapper,
+            initial_state=hf,
+        )
+        return ansatz, np.zeros(ansatz.num_parameters, dtype=float)
+    raise ValueError(f"Unsupported ansatz_kind: {ansatz_kind}")
 
-    raise ValueError(f"Unsupported ansatz mode: {ansatz_mode}")
+
+def build_optimizer(name: str = OPTIMIZER):
+    if name == "COBYLA":
+        return COBYLA(maxiter=COBYLA_MAXITER)
+    if name == "SPSA":
+        return SPSA(maxiter=SPSA_MAXITER)
+    if name == "GRADIENT_DESCENT":
+        return GradientDescent(maxiter=GD_MAXITER, learning_rate=GD_LEARNING_RATE)
+    raise ValueError(f"Unsupported optimizer: {name}")
 
 
-def build_simple_noise_model():
-    try:
-        from qiskit_aer.noise import NoiseModel, ReadoutError, depolarizing_error
-    except ImportError as exc:
-        raise ImportError(
-            "Aer noise mode requires qiskit-aer. Install it with `pip install qiskit-aer`."
-        ) from exc
+def optimizer_eval_budget(name: str = OPTIMIZER) -> int:
+    if name == "COBYLA":
+        return COBYLA_MAXITER
+    if name == "SPSA":
+        return SPSA_MAXITER * 2
+    if name == "GRADIENT_DESCENT":
+        return GD_MAXITER * 50
+    raise ValueError(f"Unsupported optimizer: {name}")
 
+
+def build_noise_model() -> NoiseModel:
     noise_model = NoiseModel()
-
-    noise_model.add_all_qubit_quantum_error(
-        depolarizing_error(NOISE_1Q_DEPOLARIZING, 1),
-        ["ry", "rz", "x"],
-    )
-    noise_model.add_all_qubit_quantum_error(
-        depolarizing_error(NOISE_2Q_DEPOLARIZING, 2),
-        ["cx"],
-    )
-
-    readout = ReadoutError(
-        [
-            [NOISE_READOUT_P00, 1.0 - NOISE_READOUT_P00],
-            [1.0 - NOISE_READOUT_P11, NOISE_READOUT_P11],
-        ]
-    )
+    noise_model.add_all_qubit_quantum_error(depolarizing_error(NOISE_1Q, 1), ["ry", "rz", "x"])
+    noise_model.add_all_qubit_quantum_error(depolarizing_error(NOISE_2Q, 2), ["cx"])
+    readout = ReadoutError([[1 - READOUT_ERROR, READOUT_ERROR], [READOUT_ERROR, 1 - READOUT_ERROR]])
     noise_model.add_all_qubit_readout_error(readout)
-
     return noise_model
 
 
-def build_estimator(backend_mode: str = VQE_BACKEND_MODE):
-    if backend_mode == "statevector":
+def build_estimator(mode: str = BACKEND_MODE, seed: int | None = RANDOM_SEED):
+    if mode == "statevector":
         return StatevectorEstimator()
-
-    try:
-        from qiskit_aer.primitives import EstimatorV2 as AerEstimator
-    except ImportError as exc:
-        raise ImportError(
-            "Aer backend modes require qiskit-aer. Install it with `pip install qiskit-aer`."
-        ) from exc
-
-    backend_options: dict[str, Any] = {"method": AER_METHOD}
-    if RANDOM_SEED is not None:
-        backend_options["seed_simulator"] = RANDOM_SEED
-
-    if backend_mode == "aer_noise":
-        backend_options["noise_model"] = build_simple_noise_model()
-    elif backend_mode != "aer_shots":
-        raise ValueError(
-            f"Unsupported backend mode: {backend_mode}. "
-            f"Use one of {BACKEND_MODES_TO_COMPARE}."
-        )
-
-    return AerEstimator(
-        options={
-            "default_precision": AER_DEFAULT_PRECISION,
-            "backend_options": backend_options,
-        }
-    )
-
-
-def build_optimizer(optimizer_name: str | None = None):
-    name = optimizer_name or OPTIMIZER_NAME
-
-    if name == "COBYLA":
-        return COBYLA(maxiter=int(COBYLA_MAXITER))
-    if name == "SPSA":
-        return SPSA(maxiter=int(SPSA_MAXITER))
-    if name == "GRADIENT_DESCENT":
-        return GradientDescent(
-            maxiter=int(GD_MAXITER),
-            learning_rate=GD_LEARNING_RATE,
-        )
-
-    raise ValueError(f"Unsupported optimizer: {name}")
-
-
-def get_optimizer_maxiter(optimizer_name: str | None = None) -> int:
-    name = optimizer_name or OPTIMIZER_NAME
-    if name == "COBYLA":
-        return int(COBYLA_MAXITER)
-    if name == "SPSA":
-        return int(SPSA_MAXITER) * 2
-    if name == "GRADIENT_DESCENT":
-        return int(GD_MAXITER)
-    raise ValueError(f"Unsupported optimizer: {name}")
-
-
-def run_repeated_trials(
-    qubit_hamiltonian: Any,
-    num_trials: int,
-    reps: int = DEFAULT_REPS,
-    optimizer_name: str | None = None,
-    ansatz_mode: str = DEFAULT_ANSATZ_MODE,
-    problem: Any | None = None,
-    mapper: Any | None = None,
-    show_progress: bool = False,
-    base_seed: int | None = RANDOM_SEED,
-    backend_mode: str = VQE_BACKEND_MODE,
-) -> list[dict[str, Any]]:
-    results = []
-
-    for trial_idx in range(num_trials):
-        trial_seed = (trial_idx + 1) if base_seed is None else (base_seed + trial_idx)
-        result = run_vqe(
-            qubit_hamiltonian=qubit_hamiltonian,
-            reps=reps,
-            optimizer_name=optimizer_name,
-            ansatz_mode=ansatz_mode,
-            problem=problem,
-            mapper=mapper,
-            show_progress=show_progress,
-            progress_label=f"{optimizer_name} trial={trial_idx + 1}",
-            random_seed=trial_seed,
-            backend_mode=backend_mode,
-        )
-        result["trial_index"] = trial_idx
-        result["random_seed"] = trial_seed
-        results.append(result)
-
-    return results
+    options = {
+        "default_precision": AER_DEFAULT_PRECISION,
+        "backend_options": {"method": "automatic", "seed_simulator": seed},
+    }
+    if mode == "aer_noise":
+        options["backend_options"]["noise_model"] = build_noise_model()
+    if mode not in {"aer_shots", "aer_noise"}:
+        raise ValueError(f"Unsupported backend mode: {mode}")
+    return AerEstimator(options=options)
 
 
 def run_vqe(
     qubit_hamiltonian: Any,
-    reps: int = DEFAULT_REPS,
-    optimizer_name: str | None = None,
-    ansatz_mode: str = DEFAULT_ANSATZ_MODE,
+    *,
+    ansatz_kind: str = ANSATZ_KIND,
+    optimizer_name: str = OPTIMIZER,
+    reps: int = REPS,
+    backend_mode: str = BACKEND_MODE,
     problem: Any | None = None,
     mapper: Any | None = None,
-    show_progress: bool = False,
-    progress_label: str | None = None,
-    random_seed: int | None = None,
-    backend_mode: str = VQE_BACKEND_MODE,
+    seed: int | None = RANDOM_SEED,
+    show_progress: bool = USE_TQDM,
+    label: str | None = None,
 ) -> dict[str, Any]:
-    chosen_optimizer = optimizer_name or OPTIMIZER_NAME
-
-    seed = RANDOM_SEED if random_seed is None else random_seed
-    algorithm_globals.random_seed = seed
     if seed is not None:
+        algorithm_globals.random_seed = seed
         np.random.seed(seed)
 
     ansatz, initial_point = build_ansatz(
-        num_qubits=qubit_hamiltonian.num_qubits,
+        qubit_hamiltonian.num_qubits,
+        ansatz_kind=ansatz_kind,
         reps=reps,
-        ansatz_mode=ansatz_mode,
         problem=problem,
         mapper=mapper,
     )
+    estimator = build_estimator(backend_mode, seed)
+    optimizer = build_optimizer(optimizer_name)
 
-    estimator = build_estimator(backend_mode=backend_mode)
-    optimizer = build_optimizer(chosen_optimizer)
-
-    counts: list[int] = []
-    energies: list[float] = []
-
-    pbar = None
-    last_eval_count = 0
-
+    counts, energies = [], []
+    bar = None
+    last_eval = 0
     if show_progress:
-        desc = progress_label or f"VQE {ansatz_mode} {chosen_optimizer} {backend_mode}"
-        pbar = tqdm(
-            total=get_optimizer_maxiter(chosen_optimizer),
-            desc=desc,
-            leave=False,
-        )
+        bar = tqdm(total=optimizer_eval_budget(optimizer_name), desc=label or f"{backend_mode}:{optimizer_name}", leave=False)
 
     def callback(eval_count, parameters, mean, metadata):
-        nonlocal last_eval_count
-
+        nonlocal last_eval
         counts.append(int(eval_count))
         energies.append(float(mean))
+        if bar is not None:
+            inc = max(0, int(eval_count) - last_eval)
+            if inc:
+                bar.update(inc)
+                last_eval = int(eval_count)
+            bar.set_postfix(best=f"{min(energies):.6f}")
 
-        if pbar is not None:
-            increment = max(0, int(eval_count) - last_eval_count)
-            if increment > 0:
-                pbar.update(increment)
-            pbar.set_postfix({"energy": f"{float(mean):.6f}"})
-            last_eval_count = int(eval_count)
-
-    solver = VQE(
+    result = VQE(
         estimator=estimator,
         ansatz=ansatz,
         optimizer=optimizer,
         initial_point=initial_point,
         callback=callback,
-    )
+    ).compute_minimum_eigenvalue(qubit_hamiltonian)
 
-    result = solver.compute_minimum_eigenvalue(qubit_hamiltonian)
-
-    if pbar is not None:
-        pbar.close()
+    if bar is not None:
+        bar.close()
 
     return {
-        "optimizer_name": chosen_optimizer,
-        "ansatz_mode": ansatz_mode,
-        "backend_mode": backend_mode,
         "energy": float(result.eigenvalue.real),
-        "optimal_point": [float(x) for x in result.optimal_point],
         "counts": counts,
         "energies": energies,
-        "ansatz_num_qubits": int(ansatz.num_qubits),
+        "optimal_point": [float(x) for x in result.optimal_point],
         "ansatz_num_parameters": int(ansatz.num_parameters),
-        "ansatz_depth": int(ansatz.decompose().depth() if hasattr(ansatz, "decompose") else ansatz.depth()),
-        "ansatz": ansatz,
+        "ansatz_depth": int(ansatz.depth()) if ansatz_kind == "hardware_efficient" else None,
+        "ansatz_kind": ansatz_kind,
+        "optimizer_name": optimizer_name,
+        "backend_mode": backend_mode,
+        "seed": seed,
     }
 
 
-def run_reps_experiment(
-    qubit_hamiltonian: Any,
-    reps_values: list[int],
-    optimizer_name: str | None = None,
-    ansatz_mode: str = DEFAULT_ANSATZ_MODE,
-    problem: Any | None = None,
-    mapper: Any | None = None,
-    show_progress: bool = False,
-    backend_mode: str = VQE_BACKEND_MODE,
-) -> dict[int, dict[str, Any]]:
-    results: dict[int, dict[str, Any]] = {}
-    for reps in reps_values:
-        results[reps] = run_vqe(
-            qubit_hamiltonian=qubit_hamiltonian,
-            reps=reps,
-            optimizer_name=optimizer_name,
-            ansatz_mode=ansatz_mode,
-            problem=problem,
-            mapper=mapper,
-            show_progress=show_progress,
-            backend_mode=backend_mode,
-        )
-    return results
+def sweep(values: list[Any], run_fn: Callable[[Any], dict[str, Any]]) -> dict[Any, dict[str, Any]]:
+    return {value: run_fn(value) for value in values}
 
 
-def run_optimizer_experiment(
-    qubit_hamiltonian: Any,
-    optimizer_names: list[str],
-    reps: int,
-    ansatz_mode: str = DEFAULT_ANSATZ_MODE,
-    problem: Any | None = None,
-    mapper: Any | None = None,
-    show_progress: bool = False,
-    backend_mode: str = VQE_BACKEND_MODE,
-) -> dict[str, dict[str, Any]]:
-    results: dict[str, dict[str, Any]] = {}
-    for optimizer_name in optimizer_names:
-        results[optimizer_name] = run_vqe(
-            qubit_hamiltonian=qubit_hamiltonian,
-            reps=reps,
-            optimizer_name=optimizer_name,
-            ansatz_mode=ansatz_mode,
-            problem=problem,
-            mapper=mapper,
-            show_progress=show_progress,
-            backend_mode=backend_mode,
-        )
-    return results
-
-
-def run_backend_mode_experiment(
-    qubit_hamiltonian: Any,
-    backend_modes: list[str],
-    optimizer_names: list[str],
-    reps: int,
-    ansatz_mode: str = DEFAULT_ANSATZ_MODE,
-    problem: Any | None = None,
-    mapper: Any | None = None,
-    show_progress: bool = False,
-) -> dict[str, dict[str, dict[str, Any]]]:
-    results: dict[str, dict[str, dict[str, Any]]] = {}
-    for backend_mode in backend_modes:
-        results[backend_mode] = run_optimizer_experiment(
-            qubit_hamiltonian=qubit_hamiltonian,
-            optimizer_names=optimizer_names,
-            reps=reps,
-            ansatz_mode=ansatz_mode,
-            problem=problem,
-            mapper=mapper,
-            show_progress=show_progress,
-            backend_mode=backend_mode,
-        )
-    return results
-
-
-def run_ansatz_mode_experiment(
-    qubit_hamiltonian: Any,
-    ansatz_modes: list[str],
-    reps: int,
-    optimizer_name: str,
-    problem: Any,
-    mapper: Any,
-    show_progress: bool = False,
-    backend_mode: str = VQE_BACKEND_MODE,
-) -> dict[str, dict[str, Any]]:
-    results: dict[str, dict[str, Any]] = {}
-    for ansatz_mode in ansatz_modes:
-        results[ansatz_mode] = run_vqe(
-            qubit_hamiltonian=qubit_hamiltonian,
-            reps=reps,
-            optimizer_name=optimizer_name,
-            ansatz_mode=ansatz_mode,
-            problem=problem,
-            mapper=mapper,
-            show_progress=show_progress,
-            backend_mode=backend_mode,
-        )
-    return results
-
-
-def run_optimizer_reps_grid(
-    qubit_hamiltonian: Any,
-    optimizer_names: list[str],
-    reps_values: list[int],
-    ansatz_mode: str = DEFAULT_ANSATZ_MODE,
-    problem: Any | None = None,
-    mapper: Any | None = None,
-    show_progress: bool = False,
-    backend_mode: str = VQE_BACKEND_MODE,
-) -> dict[str, dict[int, dict[str, Any]]]:
-    results: dict[str, dict[int, dict[str, Any]]] = {}
-
-    for optimizer_name in optimizer_names:
-        results[optimizer_name] = {}
-        for reps in reps_values:
-            results[optimizer_name][reps] = run_vqe(
-                qubit_hamiltonian=qubit_hamiltonian,
-                reps=reps,
-                optimizer_name=optimizer_name,
-                ansatz_mode=ansatz_mode,
-                problem=problem,
-                mapper=mapper,
-                show_progress=show_progress,
-                progress_label=f"{optimizer_name} reps={reps}",
-                backend_mode=backend_mode,
-            )
-
+def repeat(num_trials: int, run_fn: Callable[[int | None], dict[str, Any]], base_seed: int | None = RANDOM_SEED) -> list[dict[str, Any]]:
+    results = []
+    for i in range(num_trials):
+        trial_seed = None if base_seed is None else base_seed + i
+        result = run_fn(trial_seed)
+        result["trial_index"] = i
+        result["seed"] = trial_seed
+        results.append(result)
     return results

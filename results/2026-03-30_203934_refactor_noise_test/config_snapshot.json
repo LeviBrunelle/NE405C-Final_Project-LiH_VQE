@@ -1,0 +1,63 @@
+{
+  "AER_DEFAULT_PRECISION": 0.05,
+  "ANSATZ_FOLD": 50,
+  "ANSATZ_KIND": "hardware_efficient",
+  "ANSATZ_KINDS": [
+    "hardware_efficient",
+    "uccsd_hf"
+  ],
+  "BACKEND_MODE": "statevector",
+  "BACKEND_MODES": [
+    "statevector",
+    "aer_shots",
+    "aer_noise"
+  ],
+  "BASIS": "sto3g",
+  "BASIS_SETS": [
+    "sto3g",
+    "3-21g"
+  ],
+  "BOND_LENGTHS": [
+    0.1,
+    0.5,
+    1.0,
+    1.5,
+    2.0,
+    2.5,
+    3.0
+  ],
+  "CHARGE": 0,
+  "COBYLA_MAXITER": 200,
+  "DEFAULT_BOND_LENGTH": 0.7,
+  "ENTANGLEMENT_PATTERN": "linear",
+  "EXPERIMENT": "noise",
+  "FIG_DPI": 300,
+  "GD_LEARNING_RATE": 0.05,
+  "GD_MAXITER": 12,
+  "MAX_EXACT_QUBITS": 16,
+  "MOLECULE_NAME": "LiH",
+  "NOISE_1Q": 0.001,
+  "NOISE_2Q": 0.01,
+  "NUM_TRIALS": 5,
+  "OPTIMIZER": "COBYLA",
+  "OPTIMIZERS": [
+    "COBYLA",
+    "SPSA"
+  ],
+  "PREVIEW_TERM_COUNT": 15,
+  "RANDOM_SEED": 123,
+  "READOUT_ERROR": 0.02,
+  "REPS": 2,
+  "REPS_VALUES": [
+    1,
+    2,
+    3
+  ],
+  "RUN_NAME": "refactor_noise_test",
+  "SAVE_ANSATZ_FIGURE": true,
+  "SAVE_PLOTS": true,
+  "SAVE_SUMMARIES": true,
+  "SPIN": 0,
+  "SPSA_MAXITER": 100,
+  "USE_TQDM": true
+}

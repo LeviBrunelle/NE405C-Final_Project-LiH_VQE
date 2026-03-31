@@ -1,0 +1,32 @@
+{
+  "statevector": {
+    "COBYLA": {
+      "energy": -8.741691226275165,
+      "absolute_error": 1.0312628730915385
+    },
+    "SPSA": {
+      "energy": -7.163545780053572,
+      "absolute_error": 2.6094083193131317
+    }
+  },
+  "aer_shots": {
+    "COBYLA": {
+      "energy": -7.4622034402716055,
+      "absolute_error": 2.310750659095098
+    },
+    "SPSA": {
+      "energy": -7.416359909073988,
+      "absolute_error": 2.356594190292716
+    }
+  },
+  "aer_noise": {
+    "COBYLA": {
+      "energy": -7.322994523103107,
+      "absolute_error": 2.4499595762635966
+    },
+    "SPSA": {
+      "energy": -7.394732518922005,
+      "absolute_error": 2.3782215804446984
+    }
+  }
+}

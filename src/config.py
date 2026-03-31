@@ -3,79 +3,51 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 RESULTS_DIR = PROJECT_ROOT / "results"
 
-RUN_LABEL = "LiH_reps_he_seeded"
+RUN_NAME = "refactor_noise_test"
+EXPERIMENT = "noise"  # single, reps, optimizer, ansatz, repeat_single, 
+                       # repeat_optimizer, repeat_ansatz, bond_scan, basis,
+                       # optimizer_reps, noise
 
-# Choose simulation type (only set one to True)
-RUN_SINGLE_POINT = False
-RUN_REPS_EXPERIMENT = False
-RUN_OPTIMIZER_EXPERIMENT = False
-RUN_BOND_SCAN = False
-RUN_BASIS_COMPARISON = False
-RUN_ANSATZ_MODE_COMPARISON = False
-RUN_REPEATED_SINGLE_POINT = False
-RUN_REPEATED_OPTIMIZER_EXPERIMENT = False
-RUN_REPEATED_ANSATZ_MODE_EXPERIMENT = False
-RUN_OPTIMIZER_REPS_GRID = False
-RUN_NOISE_EXPERIMENT = True
-
+MOLECULE_NAME = "LiH"  # LiH or BeH2
 BASIS = "sto3g"
-BASIS_SETS_TO_COMPARE = ["sto3g", "3-21g"]
-
-DEFAULT_ANSATZ_MODE = "hardware_efficient"
-ANSATZ_MODES_TO_COMPARE = ["hardware_efficient", "uccsd_hf"]
-
-DEFAULT_BOND_LENGTH = 1.6
-BOND_LENGTHS = [1.0, 1.5, 2.0, 2.5, 3.0]
-
-DEFAULT_REPS = 2
-REPS_EXPERIMENT = [1, 5, 10, 15]
-
-OPTIMIZER_NAME = "COBYLA"
-COBYLA_MAXITER = 200
-SPSA_MAXITER = COBYLA_MAXITER // 2
-GD_MAXITER = COBYLA_MAXITER // 25
-GD_LEARNING_RATE = 0.2
-OPTIMIZERS_TO_COMPARE = ["COBYLA", "SPSA"]
-
-RANDOM_SEED = None
-NUM_TRIALS = 5
-
-MOLECULE_NAME = "LiH"  # "LiH" or "BeH2"
+BASIS_SETS = ["sto3g", "3-21g"]
 CHARGE = 0
 SPIN = 0
 
-MAPPER_NAME = "jordan_wigner"
-ENTANGLEMENT_PATTERN = "linear"
+DEFAULT_BOND_LENGTH = 0.7
+BOND_LENGTHS = [0.1, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
 MAX_EXACT_QUBITS = 16
-USE_TQDM = True
-ANSATZ_FOLD = 50
-FIG_DPI = 300
-PREVIEW_TERM_COUNT = 15
 
-# Backend / noise controls
-VQE_BACKEND_MODE = "statevector"   # "statevector", "aer_shots", "aer_noise"
-BACKEND_MODES_TO_COMPARE = ["statevector", "aer_shots", "aer_noise"]
+ANSATZ_KIND = "hardware_efficient"  # hardware_efficient or uccsd_hf
+ANSATZ_KINDS = ["hardware_efficient", "uccsd_hf"]
+ENTANGLEMENT_PATTERN = "linear"
+REPS = 2
+REPS_VALUES = [1, 2, 3]
+
+OPTIMIZER = "COBYLA"  # COBYLA, SPSA
+OPTIMIZERS = ["COBYLA", "SPSA"]
+COBYLA_MAXITER = 200
+SPSA_MAXITER = 100
+GD_MAXITER = 12
+GD_LEARNING_RATE = 0.05
+
+BACKEND_MODE = "statevector"  # statevector, aer_shots, aer_noise
+BACKEND_MODES = ["statevector", "aer_shots", "aer_noise"]
 AER_DEFAULT_PRECISION = 5e-2
-AER_METHOD = "automatic"
+NOISE_1Q = 0.001
+NOISE_2Q = 0.01
+READOUT_ERROR = 0.02
 
-NOISE_1Q_DEPOLARIZING = 0.001
-NOISE_2Q_DEPOLARIZING = 0.01
-NOISE_READOUT_P00 = 0.98
-NOISE_READOUT_P11 = 0.98
+NUM_TRIALS = 5
+RANDOM_SEED = 123
+USE_TQDM = True
 
-SAVE_HAMILTONIAN_PREVIEW = True
-SAVE_CONVERGENCE_PLOT = True
-SAVE_REPS_OVERLAY_PLOT = True
-SAVE_BOND_SCAN_PLOT = True
+SAVE_PLOTS = True
+SAVE_SUMMARIES = True
 SAVE_ANSATZ_FIGURE = True
-SAVE_BOND_ERROR_PLOT = True
-SAVE_REPS_ERROR_PLOT = True
-SAVE_OPTIMIZER_OVERLAY_PLOT = True
-SAVE_BASIS_ERROR_PLOT = True
-SAVE_ANSATZ_MODE_ERROR_PLOT = True
-SAVE_REPEATED_TRIALS_PLOT = True
-SAVE_REPEATED_TRIALS_SUMMARY = True
-SAVE_NOISE_EXPERIMENT_PLOT = True
+FIG_DPI = 300
+ANSATZ_FOLD = 50
+PREVIEW_TERM_COUNT = 15
 
 
 def ensure_results_dir() -> Path:
