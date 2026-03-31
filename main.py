@@ -38,6 +38,7 @@ from src.config import (
     RUN_LABEL,
     RUN_OPTIMIZER_EXPERIMENT,
     RUN_OPTIMIZER_REPS_GRID,
+    RUN_NOISE_EXPERIMENT,
     RUN_REPEATED_ANSATZ_MODE_EXPERIMENT,
     RUN_REPEATED_OPTIMIZER_EXPERIMENT,
     RUN_REPEATED_SINGLE_POINT,
@@ -56,6 +57,9 @@ from src.config import (
     SAVE_REPS_ERROR_PLOT,
     SAVE_REPS_OVERLAY_PLOT,
     USE_TQDM,
+    VQE_BACKEND_MODE,
+    BACKEND_MODES_TO_COMPARE,
+    SAVE_NOISE_EXPERIMENT_PLOT,
     ensure_results_dir,
 )
 from src.plot_results import (
@@ -72,11 +76,13 @@ from src.plot_results import (
     plot_repeated_trials_mean_std,
     plot_reps_error,
     plot_reps_overlay,
+    plot_backend_mode_optimizer_grid,
 )
 from src.run_exact import run_exact
 from src.run_vqe import (
     build_ansatz,
     run_ansatz_mode_experiment,
+    run_backend_mode_experiment,
     run_optimizer_experiment,
     run_optimizer_reps_grid,
     run_repeated_trials,
@@ -149,6 +155,7 @@ def main() -> None:
     qubit_hamiltonian = bundle["qubit_hamiltonian"]
 
     summary = summarize_problem(problem, qubit_hamiltonian, DEFAULT_BOND_LENGTH, BASIS)
+    summary["backend_mode"] = VQE_BACKEND_MODE
     molecule_name = summary["molecule_name"]
     exact = run_exact(qubit_hamiltonian)
 
@@ -174,12 +181,14 @@ def main() -> None:
             show_progress=USE_TQDM,
             progress_label=f"single {DEFAULT_ANSATZ_MODE} {OPTIMIZER_NAME}",
             random_seed=RANDOM_SEED,
+            backend_mode=VQE_BACKEND_MODE,
         )
 
         single_run_summary = {
             **summary,
             "optimizer_name": OPTIMIZER_NAME,
             "ansatz_mode": DEFAULT_ANSATZ_MODE,
+            "backend_mode": VQE_BACKEND_MODE,
             "exact_energy": exact["energy"],
             "vqe_energy": vqe["energy"],
             "absolute_error": abs(vqe["energy"] - exact["energy"]),
@@ -256,12 +265,14 @@ def main() -> None:
             mapper=mapper,
             show_progress=USE_TQDM,
             base_seed=RANDOM_SEED,
+            backend_mode=VQE_BACKEND_MODE,
         )
 
         repeated_summary = {
             **summary,
             "optimizer_name": OPTIMIZER_NAME,
             "ansatz_mode": DEFAULT_ANSATZ_MODE,
+            "backend_mode": VQE_BACKEND_MODE,
             **summarize_repeated_trials(repeated_trials, exact["energy"]),
         }
 
@@ -290,6 +301,7 @@ def main() -> None:
             problem=problem,
             mapper=mapper,
             show_progress=USE_TQDM,
+            backend_mode=VQE_BACKEND_MODE,
         )
 
         reps_summary = {
@@ -334,6 +346,7 @@ def main() -> None:
             problem=problem,
             mapper=mapper,
             show_progress=USE_TQDM,
+            backend_mode=VQE_BACKEND_MODE,
         )
 
         optimizer_summary = {
@@ -375,6 +388,7 @@ def main() -> None:
                 mapper=mapper,
                 show_progress=USE_TQDM,
                 base_seed=RANDOM_SEED,
+                backend_mode=VQE_BACKEND_MODE,
             )
 
         repeated_optimizer_summary = {
@@ -407,6 +421,7 @@ def main() -> None:
             basis=BASIS,
             simplify_hamiltonian=True,
             show_progress=USE_TQDM,
+            backend_mode=VQE_BACKEND_MODE,
         )
         write_csv(results_dir / "bond_scan.csv", bond_scan_rows)
 
@@ -483,6 +498,7 @@ def main() -> None:
                     show_progress=USE_TQDM,
                     progress_label=f"VQE basis={basis}",
                     random_seed=RANDOM_SEED,
+                    backend_mode=VQE_BACKEND_MODE,
                 )
                 vqe_energy = basis_vqe["energy"]
                 absolute_error = abs(vqe_energy - exact_energy)
@@ -535,6 +551,7 @@ def main() -> None:
             problem=problem,
             mapper=mapper,
             show_progress=USE_TQDM,
+            backend_mode=VQE_BACKEND_MODE,
         )
 
         ansatz_mode_rows = []
@@ -544,6 +561,7 @@ def main() -> None:
                     **summary,
                     "ansatz_mode": ansatz_mode,
                     "optimizer_name": OPTIMIZER_NAME,
+                    "backend_mode": VQE_BACKEND_MODE,
                     "exact_energy": exact["energy"],
                     "vqe_energy": data["energy"],
                     "absolute_error": abs(data["energy"] - exact["energy"]),
@@ -594,6 +612,7 @@ def main() -> None:
                 mapper=mapper,
                 show_progress=USE_TQDM,
                 base_seed=RANDOM_SEED,
+                backend_mode=VQE_BACKEND_MODE,
             )
 
         repeated_ansatz_summary = {
@@ -616,6 +635,48 @@ def main() -> None:
         for ansatz_mode, row in repeated_ansatz_summary.items():
             print(f"{ansatz_mode}: {row}")
 
+
+    if RUN_NOISE_EXPERIMENT:
+        print("[extra] Running backend-mode / noise comparison...")
+
+        backend_mode_results = run_backend_mode_experiment(
+            qubit_hamiltonian=qubit_hamiltonian,
+            backend_modes=BACKEND_MODES_TO_COMPARE,
+            optimizer_names=OPTIMIZERS_TO_COMPARE,
+            reps=DEFAULT_REPS,
+            ansatz_mode=DEFAULT_ANSATZ_MODE,
+            problem=problem,
+            mapper=mapper,
+            show_progress=USE_TQDM,
+        )
+
+        backend_mode_summary = {}
+        for backend_mode, optimizer_histories in backend_mode_results.items():
+            backend_mode_summary[backend_mode] = {}
+            for optimizer_name, data in optimizer_histories.items():
+                backend_mode_summary[backend_mode][optimizer_name] = {
+                    "energy": data["energy"],
+                    "absolute_error": abs(data["energy"] - exact["energy"]),
+                    "ansatz_num_parameters": data["ansatz_num_parameters"],
+                    "ansatz_depth": data["ansatz_depth"],
+                }
+
+        write_json(results_dir / "backend_mode_experiment_summary.json", backend_mode_summary)
+
+        if SAVE_NOISE_EXPERIMENT_PLOT:
+            plot_backend_mode_optimizer_grid(
+                histories_by_backend=backend_mode_results,
+                exact_energy=exact["energy"],
+                output_path=results_dir / f"{molecule_name.lower()}_backend_mode_optimizer_grid.png",
+                title=f"{molecule_name}: exact vs Aer shots vs Aer noise",
+            )
+
+        print("\nBackend-mode comparison:")
+        for backend_mode, optimizer_rows in backend_mode_summary.items():
+            print(backend_mode)
+            for optimizer_name, row in optimizer_rows.items():
+                print(f"  {optimizer_name}: {row}")
+
     if RUN_OPTIMIZER_REPS_GRID:
         print("[extra] Running optimizer-reps grid...")
 
@@ -627,6 +688,7 @@ def main() -> None:
             problem=problem,
             mapper=mapper,
             show_progress=USE_TQDM,
+            backend_mode=VQE_BACKEND_MODE,
         )
 
         optimizer_reps_summary = {}

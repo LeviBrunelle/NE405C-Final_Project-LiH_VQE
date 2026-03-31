@@ -1,0 +1,44 @@
+{
+  "statevector": {
+    "COBYLA": {
+      "energy": -7.838879404883801,
+      "absolute_error": 1.0356522444746448,
+      "ansatz_num_parameters": 48,
+      "ansatz_depth": 17
+    },
+    "SPSA": {
+      "energy": -6.4892461832379364,
+      "absolute_error": 2.385285466120509,
+      "ansatz_num_parameters": 48,
+      "ansatz_depth": 17
+    }
+  },
+  "aer_shots": {
+    "COBYLA": {
+      "energy": -7.460500305547876,
+      "absolute_error": 1.4140313438105698,
+      "ansatz_num_parameters": 48,
+      "ansatz_depth": 17
+    },
+    "SPSA": {
+      "energy": -6.5200763354838625,
+      "absolute_error": 2.354455313874583,
+      "ansatz_num_parameters": 48,
+      "ansatz_depth": 17
+    }
+  },
+  "aer_noise": {
+    "COBYLA": {
+      "energy": -6.496329652502703,
+      "absolute_error": 2.3782019968557426,
+      "ansatz_num_parameters": 48,
+      "ansatz_depth": 17
+    },
+    "SPSA": {
+      "energy": -6.714810172323717,
+      "absolute_error": 2.1597214770347284,
+      "ansatz_num_parameters": 48,
+      "ansatz_depth": 17
+    }
+  }
+}

@@ -431,3 +431,49 @@ def plot_optimizer_reps_overlay(
         plt.savefig(output_path, dpi=300, bbox_inches="tight")
 
     plt.close()
+
+
+def plot_backend_mode_optimizer_grid(
+    histories_by_backend: dict[str, dict[str, dict]],
+    exact_energy: float,
+    output_path: str | Path | None = None,
+    title: str = "VQE under different backend noise models",
+) -> None:
+    if not histories_by_backend:
+        return
+
+    pretty_names = {
+        "statevector": "Exact statevector",
+        "aer_shots": "Aer shots",
+        "aer_noise": "Aer shots + noise",
+    }
+
+    ncols = len(histories_by_backend)
+    fig, axes = plt.subplots(1, ncols, figsize=(6 * ncols, 5), sharey=True)
+    if ncols == 1:
+        axes = [axes]
+
+    for ax, (backend_mode, histories) in zip(axes, histories_by_backend.items()):
+        for optimizer_name, data in histories.items():
+            ax.plot(
+                data["counts"],
+                data["energies"],
+                marker="o",
+                markersize=3,
+                label=optimizer_name,
+            )
+
+        ax.axhline(exact_energy, linestyle="--", label="Exact energy")
+        ax.set_title(pretty_names.get(backend_mode, backend_mode))
+        ax.set_xlabel("Evaluation count")
+        ax.grid()
+
+    axes[0].set_ylabel("Energy (Hartree)")
+    axes[-1].legend()
+    fig.suptitle(title)
+    fig.tight_layout()
+
+    if output_path is not None:
+        fig.savefig(output_path, dpi=300, bbox_inches="tight")
+
+    plt.close(fig)

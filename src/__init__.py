@@ -10,6 +10,7 @@ from .run_exact import run_exact
 from .run_vqe import (
     build_ansatz,
     run_ansatz_mode_experiment,
+    run_backend_mode_experiment,
     run_optimizer_experiment,
     run_reps_experiment,
     run_vqe,
@@ -26,6 +27,7 @@ __all__ = [
     "run_exact",
     "build_ansatz",
     "run_ansatz_mode_experiment",
+    "run_backend_mode_experiment",
     "run_optimizer_experiment",
     "run_reps_experiment",
     "run_vqe",

@@ -5,7 +5,7 @@ from typing import Any
 from tqdm.auto import tqdm
 
 from .build_hamiltonian import get_problem_bundle, summarize_problem
-from .config import BASIS
+from .config import BASIS, VQE_BACKEND_MODE
 from .run_exact import run_exact
 from .run_vqe import run_vqe
 
@@ -18,6 +18,7 @@ def scan_bond_lengths(
     basis: str = BASIS,
     simplify_hamiltonian: bool = True,
     show_progress: bool = False,
+    backend_mode: str = VQE_BACKEND_MODE,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
 
@@ -42,6 +43,7 @@ def scan_bond_lengths(
             problem=problem,
             mapper=mapper,
             show_progress=False,
+            backend_mode=backend_mode,
         )
 
         summary = summarize_problem(
@@ -56,6 +58,7 @@ def scan_bond_lengths(
                 **summary,
                 "optimizer_name": optimizer_name,
                 "ansatz_mode": ansatz_mode,
+                "backend_mode": backend_mode,
                 "exact_energy": exact["energy"],
                 "vqe_energy": vqe["energy"],
                 "absolute_error": abs(vqe["energy"] - exact["energy"]),
